@@ -1,0 +1,18 @@
+<footer class="bottom-nav">
+    <a href="/home/<%= userRole %>" class="nav-item <%= currentPage === 'home' ? 'active' : '' %>">
+        <span class="material-icons">home</span>
+        <span class="nav-label">Home</span>
+    </a>
+        <a href="/appointment" class="nav-item <%= currentPage === 'appointment' ? 'active' : '' %>"> 
+        <span class="material-icons">calendar_today</span>
+        <span class="nav-label">Appointment</span>
+    </a>
+        <a href="/history" class="nav-item <%= currentPage === 'history' ? 'active' : '' %>">
+        <span class="material-icons">history</span>
+        <span class="nav-label">History</span>
+    </a>
+    <a href="/profile" class="nav-item <%= currentPage === 'profile' ? 'active' : '' %>">
+        <span class="material-icons">person</span>
+        <span class="nav-label">Profile</span>
+    </a>
+</footer>

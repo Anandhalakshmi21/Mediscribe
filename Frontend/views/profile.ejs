@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Profile</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="/css/role-styles.css">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+</head>
+<body class="page-container">
+
+    <header class="main-header">
+        <div class="app-info">
+            <span class="app-logo">👤</span>
+            <h1>My Profile</h1>
+            <a href="/home/<%= userRole %>" class="back-btn">
+                <span class="material-icons">arrow_back</span> 
+            </a>
+        </div>
+        <div class="header-action">
+            <button class="icon-btn logout-btn" onclick="logoutUser()">
+                <span class="material-icons" title="Logout">exit_to_app</span>
+            </button>
+        </div>
+    </header>
+
+    <main class="content-area profile-page">
+        
+        <section class="profile-card">
+            <div class="profile-header">
+                <div class="profile-photo-container" onclick="document.getElementById('photoUpload').click()">
+                    <img id="profilePhoto" src="/img/default-doctor.png" alt="Profile Photo">
+                    <span class="material-icons edit-icon">photo_camera</span>
+                    <input type="file" id="photoUpload" accept="image/*" style="display: none;" onchange="previewPhoto(event)">
+                </div>
+                <h2>
+                    <%= (typeof userRole !== 'undefined' && userRole === 'doctor') ? 'Dr. ' : '' %>
+                    <%= (typeof userData !== 'undefined') ? userData.firstname : '' %> 
+                    <%= (typeof userData !== 'undefined') ? userData.lastname : '' %>
+                </h2>
+                <% if (userRole === 'doctor') { %>
+                    <p class="specialization">[<%= userData.specialty %>]</p>
+                <% } %>
+            </div>
+            
+            <div class="profile-details">
+                <div class="detail-row">
+                    <span class="material-icons">email</span>
+                    <p><%= userData.email %></p>
+                </div>
+                <div class="detail-row">
+                    <span class="material-icons">phone</span>
+                    <p><%= userData.phonenumber %></p>
+                </div>
+                <% if (userRole === 'doctor') { %>
+                    <div class="detail-row">
+                        <span class="material-icons">badge</span>
+                        <p><%= userData.specialty %></p>
+                    </div>
+                <% } %>
+            </div>
+        </section>
+
+        <section class="info-section">
+            <h3><span class="material-icons">school</span> Professional Info</h3>
+            <div class="info-box">
+                <textarea id="qualifications" placeholder="Enter Qualifications (e.g., MBBS, MD, FRCP)" rows="3" onblur="saveProfile('qualifications')"></textarea>
+                <textarea id="experience" placeholder="Enter Experience/Bio" rows="3" onblur="saveProfile('experience')"></textarea>
+            </div>
+        </section>
+
+        <section class="info-section">
+            <h3><span class="material-icons">analytics</span> Practice Metrics</h3>
+            <div class="metrics-grid">
+                <div class="metric-card green-bg">
+                    <h4>Patients (Month)</h4>
+                    <p>150</p>
+                </div>
+                <div class="metric-card blue-bg">
+                    <h4>Patients (Year)</h4>
+                    <p>1,820</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="info-section">
+            <h3><span class="material-icons">settings</span> App Settings</h3>
+            <div class="settings-group">
+                <label for="themeSelect">Background Theme:</label>
+                <select id="themeSelect" onchange="changeTheme(this.value)">
+                    <option value="light">Light Mode</option>
+                    <option value="dark">Dark Mode</option>
+                </select>
+            </div>
+            <div class="settings-group">
+                <label for="notificationToggle">Appointment Reminders:</label>
+                <input type="checkbox" id="notificationToggle" checked>
+            </div>
+        </section>
+
+    </main>
+
+    <%- include('includes/navbar.ejs', { userRole: userRole, currentPage: currentPage }) %>
+
+    <script src="/js/main.js"></script>
+    <script src="/js/profile.js"></script>
+</body>
+</html>

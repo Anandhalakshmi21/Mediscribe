@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clinical Assistant - Sign Up</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+</head>
+<body class="auth-page">
+
+    <div class="signup-container">
+        <header class="logo-header">
+            <span class="app-logo">⚕️</span>
+            <h1>Clinical Assistant</h1>
+        </header>
+
+        <form id="signupForm" class="auth-form" method="POST" action="/signup">
+            <h2>Sign Up</h2>
+
+            <div class="input-group full-width name-group">
+                <div class="input-field half-width">
+                    <span class="material-icons">person_outline</span>
+                    <input type="text" id="firstName" name="firstName" placeholder="First Name" required>
+                </div>
+                <div class="input-field half-width">
+                    <span class="material-icons" style="visibility: hidden;">person_outline</span>
+                    <input type="text" id="lastName" name="lastName" placeholder="Last Name" required>
+                </div>
+            </div>
+
+            <div class="input-group">
+                <span class="material-icons">person</span>
+                <select id="signupRole" name="signupRole" required onchange="toggleDoctorFields(this.value)">
+                    <option value="" disabled selected>Select Role</option>
+                    <option value="doctor">Doctor</option>
+                    <option value="assistant">Assistant</option>
+                </select>
+            </div>
+
+            <div id="doctorFields" class="doctor-fields" style="display: none;">
+                <div class="input-group">
+                    <span class="material-icons">badge</span>
+                    <input type="text" id="signupLicense" name="licenseNumber" placeholder="Medical License Number">
+                </div>
+                <div class="input-group">
+                    <span class="material-icons">healing</span>
+                    <input type="text" id="signupSpecialization" name="specialty" placeholder="Specialty (e.g., Cardiology)">
+                </div>
+            </div>
+
+            <div class="input-group">
+                <span class="material-icons">email</span>
+                <input type="email" id="signupEmail" name="signupEmail" placeholder="Email" required>
+            </div>
+            
+            <div class="input-group">
+                <span class="material-icons">phone</span>
+                <input type="tel" id="signupPhone" name="signupPhone" placeholder="Phone Number" required>
+            </div>
+
+            <div class="input-group">
+                <span class="material-icons">lock</span>
+                <input type="password" id="signupPassword" name="signupPassword" placeholder="Password" required>
+            </div>
+            
+            <button type="submit" class="btn btn-secondary">Register</button>
+            
+            <p class="switch-link">
+                Already have an account? <a href="/login">Log In</a>
+            </p>
+        </form>
+    </div>
+
+    <script src="/js/auth.js"></script>
+</body>
+</html>

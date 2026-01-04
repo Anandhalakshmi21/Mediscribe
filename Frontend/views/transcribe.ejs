@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <% 
+    const currentPatientId = (typeof patientId !== 'undefined') ? patientId : 'UNKNOWN';
+    %>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Consultation - Transcribing</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="/css/role-styles.css">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+</head>
+<body class="page-container">
+
+    <header class="main-header">
+        <div class="app-info">
+            <span class="app-logo">🎙️</span>
+            <h1>Consultation: <%= currentPatientId ? 'Patient ' + currentPatientId : 'Select a Patient' %></h1>        </div>
+        <div class="header-action">
+            <button class="icon-btn end-session-btn" onclick="endSessionPrompt()">
+                <span class="material-icons" title="End Session">close</span>
+            </button>
+        </div>
+    </header>
+
+    <main class="content-area transcribe-page">
+        
+        <section class="transcription-area">
+            <div class="transcription-output" id="transcriptionOutput">
+                <p class="status-message inactive">Tap the mic to start recording the consultation.</p>
+            </div>
+        </section>
+
+        <aside id="predictionSidebar" class="prediction-sidebar">
+            <h3>AI Prediction Assistant</h3>
+            <div class="prediction-content">
+                <p class="status-message">Listening for key clinical data...</p>
+                <div class="prediction-item">
+                    <h4><span class="material-icons">local_hospital</span> Potential Disease</h4>
+                    <ul id="diseasePrediction">
+                        <li>Fever of Unknown Origin</li>
+                        <li>(Based on 'temperature', 'malaise', 'persists')</li>
+                    </ul>
+                </div>
+                <div class="prediction-item">
+                    <h4><span class="material-icons">medical_services</span> Suggested Medication</h4>
+                    <ul id="medicationSuggestion">
+                        <li>Paracetamol 500mg</li>
+                        <li>(Based on fever and headache symptoms)</li>
+                    </ul>
+                </div>
+                <div class="prediction-item">
+                    <h4><span class="material-icons">science</span> Recommended Tests</h4>
+                    <ul id="testSuggestion">
+                        <li>Complete Blood Count (CBC)</li>
+                    </ul>
+                </div>
+            </div>
+        </aside>
+
+    </main>
+    
+    <footer class="transcribe-controls">
+        
+        <div class="mic-controls">
+            <button class="btn mic-btn start-mic-btn" id="startMic" onclick="startRecording()">
+                <span class="material-icons">mic</span>
+            </button>
+            
+            <button class="btn mic-btn action-btn" id="pauseMic" style="display: none;" onclick="pauseRecording()">
+                <span class="material-icons">pause</span>
+            </button>
+            <button class="btn mic-btn danger-btn" id="stopMic" style="display: none;" onclick="stopRecording()">
+                <span class="material-icons">stop</span>
+            </button>
+        </div>
+
+        <div class="utility-controls">
+            <div class="dropdown" onclick="toggleUploadDropdown()">
+                <button class="upload-btn">
+                    <span class="material-icons">cloud_upload</span> Upload Options
+                </button>
+
+                <div id="uploadDropdownContent" class="dropdown-content">
+                    <a href="#" onclick="openUploadFromDeviceModal()">
+                        <span class="material-icons">folder_open</span> Upload from Device
+                    </a>
+                    <a href="#" onclick="openQrModal()">
+                        <span class="material-icons">qr_code</span> QR Code Upload
+                    </a>
+                </div>
+            </div>
+            
+            <button class="btn edit-btn" onclick="openEditModal()">
+                <span class="material-icons">edit</span> Edit Notes
+            </button>
+            
+            <button class="btn btn-primary save-btn" onclick="saveConsultationRecord('<%= currentPatientId %>')">
+                <span class="material-icons">save</span> Save Record
+            </button>
+        </div>
+    </footer>
+
+    <div id="qrCodeModal" class="modal">
+        <div class="modal-content small-modal">
+            <span class="close-btn" onclick="closeModal('qrCodeModal')">&times;</span>
+            <h3>Scan to Upload Reports</h3>
+            <div id="qrCodeDisplay">
+                <img src="/img/qr-placeholder.png" alt="QR Code" class="qr-code-img">
+                <p class="qr-link">Unique Link: <code>[Unique_Session_URL]</code></p>
+            </div>
+            <p>Tell the patient to scan this code on their phone to upload test reports associated with this session.</p>
+        </div>
+    </div>
+    
+    <div id="editModal" class="modal">
+        <div class="modal-content large-modal">
+            <span class="close-btn" onclick="closeModal('editModal')">&times;</span>
+            <h3>Edit Consultation Notes</h3>
+            <textarea id="editableNotes" rows="15" placeholder="Review and edit the full transcript here..."></textarea>
+            <button class="btn btn-secondary" onclick="saveEditedNotes()">Save Changes</button>
+        </div>
+    </div>
+
+    <div id="nextAppointmentModal" class="modal">
+        <div class="modal-content small-modal">
+            <span class="close-btn" onclick="closeModal('nextAppointmentModal')">&times;</span>
+            <h3>Schedule Follow-up</h3>
+            <input type="date" id="followUpDateInput" required>
+            <button class="btn btn-secondary" onclick="finalizeNextAppointment()">Confirm Appointment</button>
+        </div>
+    </div>
+
+
+    <script src="/js/main.js"></script>
+    <script src="/js/transcribe.js"></script>
+</body>
+</html>

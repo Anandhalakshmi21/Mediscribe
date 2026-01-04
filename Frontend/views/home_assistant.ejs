@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Assistant Home</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="/css/role-styles.css">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+</head>
+<body class="page-container">
+
+    <header class="main-header">
+        <div class="app-info">
+            <span class="app-logo">⚕️</span>
+            <h1>Clinical Assistant</h1>
+        </div>
+        <div class="header-action">
+             <a href="/profile?role=assistant" class="profile-link">
+                <span class="material-icons">account_circle</span>
+                <span class="profile-text">My Profile</span>
+            </a>
+        </div>
+    </header>
+
+    <main class="content-area home-assistant">
+        <h2>Appointment Management</h2>
+        
+        <button class="btn btn-primary add-appointment-btn" onclick="openAppointmentModal()">
+            <span class="material-icons">add_circle</span> Add New Appointment
+        </button>
+
+        <section class="todays-appointments">
+            <h3>Today's Queue</h3>
+            <div class="queue-list">
+                <% if (typeof appointments !== 'undefined' && appointments.length > 0) { %>
+                    <% appointments.forEach((appt, index) => { %>
+                        <div class="appointment-item">
+                            <span class="token-number">T<%= (index + 1).toString().padStart(2, '0') %></span>
+                            <div class="patient-info">
+                                <p><%= appt.patient_name %> (<%= appt.patient_id %>)</p>
+                                <p class="time"><%= appt.appointment_time %></p>
+                            </div>
+                            <form action="/upload-image" method="POST" enctype="multipart/form-data">
+                                <input type="hidden" name="patientId" value="<%= appt.patient_id %>">
+                                <input type="file" name="patientImage" id="file-<%= appt.patient_id %>" hidden onchange="this.form.submit()">
+                                <button type="button" class="btn btn-upload" onclick="document.getElementById('file-<%= appt.patient_id %>').click()">
+                                    <span class="material-icons">cloud_upload</span> Upload Image
+                                </button>
+                            </form>
+                        </div>
+                    <% }); %>
+                <% } else { %>
+                    <p>No appointments scheduled for today.</p>
+                <% } %>
+            </div>
+        </section>
+    </main>
+
+    <div id="appointmentModal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closeAppointmentModal()">&times;</span>
+            <h3>Schedule New Appointment</h3>
+            
+            <form id="newAppointmentForm" method="POST" action="/api/appointments">
+                <input type="text" name="patName" placeholder="Patient Name" required>
+                
+                <div class="inline-group">
+                    <input type="number" name="patAge" placeholder="Age" required>
+                    <input type="tel" name="patPhone" placeholder="Phone Number" required>
+                </div>
+                <select name="patGender" required>
+                        <option value="" disabled selected>Gender</option>
+                        <option value="Male">Male</option>
+                        <option value="Female">Female</option>
+                        <option value="Other">Other</option>
+                </select>
+                <input type="text" id="patAddress" name="patAddress" placeholder="Address">
+                <input type="datetime-local" name="apptDate" required>
+                
+                <select name="doctorId" required>
+                    <option value="" disabled selected>Select Doctor</option>
+                    <% if (typeof doctors !== 'undefined' && doctors.length > 0) { %>
+                        <% doctors.forEach(doc => { %>
+                            <option value="<%= doc.clinicianid %>">Dr. <%= doc.firstname %> <%= doc.lastname %></option>
+                        <% }); %>
+                    <% } %>
+                </select>
+                <p class="token-note">Token will be automatically assigned upon creation.</p>
+
+                <button type="submit" class="btn btn-secondary">Create Appointment</button>
+            </form>
+        </div>
+    </div>
+
+    <script src="/js/main.js"></script>
+    
+</body>
+</html>

@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Patient History</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="/css/role-styles.css">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+</head>
+<body class="page-container">
+
+    <header class="main-header">
+        <div class="app-info">
+            <span class="app-logo">📚</span>
+            <h1>Patient History</h1>
+        </div>
+        <div class="header-action">
+            <span class="material-icons">info_outline</span>
+        </div>
+    </header>
+
+    <main class="content-area history-page">
+        
+        <div class="search-container">
+            <div class="input-group search-bar">
+                <span class="material-icons">search</span>
+                <input type="text" id="patientSearch" placeholder="Search by Name or Patient ID..." onkeyup="filterHistory()">
+            </div>
+        </div>
+
+        <h2 class="section-title">All Patient Records</h2>
+
+        <section class="history-list" id="historyList">
+            
+            <div class="date-group">
+                
+                <div class="history-item" onclick="toggleDetails('PID1001-20251208')">
+                    <div class="item-summary">
+                        <p class="name">Aisha Khan</p>
+                        <p class="id">PID1001</p>
+                        <span class="material-icons expand-icon">expand_more</span>
+                    </div>
+                    <div class="item-details" id="PID1001-20251208">
+                        <h4>Consultation Summary</h4>
+                        <p><strong>Chief Complaint:</strong> Recurring migraine.</p>
+                        <p><strong>Diagnosis:</strong> Tension Headache.</p>
+                        <p><strong>Medication:</strong> Ibuprofen (as needed).</p>
+                        <p><strong>Images/Files:</strong> 1 uploaded file.</p>
+                        <button class="btn btn-details" onclick="event.stopPropagation(); viewFullRecord('PID1001', '2025-12-08')">View Full Record</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="date-group">
+                
+                <div class="history-item" onclick="toggleDetails('PID1002-20251125')">
+                    <div class="item-summary">
+                        <p class="name">Bimal Das</p>
+                        <p class="id">PID1002</p>
+                        <span class="material-icons expand-icon">expand_more</span>
+                    </div>
+                    <div class="item-details" id="PID1002-20251125">
+                        <h4>Consultation Summary</h4>
+                        <p><strong>Chief Complaint:</strong> Persistent cough and mild fever.</p>
+                        <p><strong>Diagnosis:</strong> Seasonal Flu.</p>
+                        <p><strong>Medication:</strong> Amoxicillin 500mg.</p>
+                        <p><strong>Images/Files:</strong> None.</p>
+                        <button class="btn btn-details" onclick="event.stopPropagation(); viewFullRecord('PID1002', '2025-11-25')">View Full Record</button>
+                    </div>
+                </div>
+            </div>
+            
+            </section>
+
+    </main>
+
+    <% 
+        const userRole = 'doctor'; 
+        const currentPage = 'history';
+    %>
+    <%- include('includes/navbar.ejs', { userRole: userRole, currentPage: currentPage }) %>
+
+    <script src="/js/main.js"></script>
+    <script src="/js/history.js"></script>
+</body>
+</html>

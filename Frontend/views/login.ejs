@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clinical Assistant - Login</title>
+    <link rel="stylesheet" href="/css/style.css"> 
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+</head>
+<body class="auth-page">
+
+    <div class="login-container">
+        <header class="logo-header">
+            <span class="app-logo">⚕️</span>
+            <h1>Clinical Assistant</h1>
+        </header>
+
+        <form id="loginForm" class="auth-form" action="/login" method="POST">
+            <h2>Login</h2>
+
+            <div class="input-group">
+                <span class="material-icons">email</span>
+                <input type="email" id="loginEmail" name="loginEmail" placeholder="Email / Phone Number" required>
+            </div>
+
+            <div class="input-group">
+                <span class="material-icons">lock</span>
+                <input type="password" id="loginPassword" name="loginPassword" placeholder="Password" required>
+            </div>
+            
+            <div class="input-group">
+                <span class="material-icons">person</span>
+                <select id="loginRole" name="loginRole" required>
+                    <option value="" disabled selected>Select Role</option>
+                    <option value="doctor">Doctor</option>
+                    <option value="assistant">Assistant</option>
+                </select>
+            </div>
+
+            <button type="submit" class="btn btn-primary">Log In</button>
+            
+            <p class="switch-link">
+                Don't have an account? <a href="/signup">Sign Up</a>
+            </p>
+        </form>
+    </div>
+
+    <script src="/js/auth.js"></script>
+</body>
+</html>

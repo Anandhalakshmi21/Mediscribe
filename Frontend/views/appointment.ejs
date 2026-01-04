@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Appointments</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="/css/role-styles.css">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+</head>
+<body class="page-container">
+    <% 
+    if (typeof appointments === 'undefined') {
+        var appointments = [];
+    }
+    %>
+    <header class="main-header">
+        <div class="app-info">
+            <span class="app-logo">🗓️</span>
+            <h1>Appointments</h1>
+        </div>
+        <div class="header-action">
+            <button class="icon-btn" onclick="openDateSelector()">
+                <span class="material-icons">event_note</span>
+            </button>
+        </div>
+    </header>
+
+    <main class="content-area appointment-page">
+        <h2 id="currentDateHeader">
+            Appointments for: <%= (typeof displayDate !== 'undefined') ? displayDate : 'Today' %>
+        </h2>
+
+        <section class="appointment-list">
+            <% appointments.forEach(function(patient) { %>
+                <div class="patient-card">
+                    <div class="patient-details">
+                        <p class="name"><%= patient.name %></p>
+                        <p class="id"><%= patient.id %></p>
+                    </div>
+                    <div class="patient-actions">
+                        <button class="action-btn start-consult-btn" title="Start Consultation (Transcribe)" 
+                                onclick="handleStartConsultation('<%= patient.id %>')">
+                            <span class="material-icons">add_circle_outline</span>
+                        </button>
+                        
+                        <button class="action-btn history-btn" title="View Patient History" onclick="viewPatientHistory('<%= patient.id %>')">
+                            <span class="material-icons">history</span>
+                        </button>
+                        
+                        <button class="action-btn calendar-btn" title="Schedule Next Appointment" onclick="openScheduleModal('<%= patient.id %>', '<%= patient.name %>')">
+                            <span class="material-icons">event</span>
+                        </button>
+                    </div>
+                </div>
+            <% }); %> 
+            <% if (appointments.length === 0) { %>
+                <p class="no-appointments">No more appointments scheduled for today!</p>
+            <% } %>
+        </section>
+    </main>
+
+    <div id="historyModal" class="modal">
+        <div class="modal-content large-modal">
+            <span class="close-btn" onclick="closeModal('historyModal')">&times;</span>
+            <h3>History Summary: <span id="modalPatientName"></span></h3>
+            <div class="history-content">
+                <p><strong>Last Visit:</strong> 2 weeks ago (18/11/2025)</p>
+                <p><strong>Chief Complaint:</strong> Persistent cough and mild fever.</p>
+                <p><strong>Diagnosis:</strong> Seasonal Flu (ICD-10 J10.0)</p>
+                <p><strong>Medication:</strong> Amoxicillin 500mg (7 days)</p>
+                <p class="summary-note">Click the History tab below for full detailed records.</p>
+            </div>
+            <button class="btn btn-secondary" onclick="window.location.href='/history?id=' + currentPatientId">Go to Full History</button>
+        </div>
+    </div>
+    
+    <div id="dateSelectorModal" class="modal">
+        <div class="modal-content small-modal">
+            <span class="close-btn" onclick="closeModal('dateSelectorModal')">&times;</span>
+            <h3>Select Date</h3>
+            <input type="date" id="modalDateInput" class="form-control">
+            <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 15px;">
+                <button class="btn btn-primary" id="submitDateFilter">View Appointments</button>
+                <button class="btn btn-secondary" onclick="window.location.href='/appointment'" style="background: none; border: none; color: #4a90e2; cursor: pointer;">
+                    Reset to Today
+                </button>
+            </div>
+            
+        </div>
+    </div>
+
+    <div id="scheduleModal" class="modal">
+        <div class="modal-content small-modal">
+            <span class="close-btn" onclick="closeModal('scheduleModal')">&times;</span>
+            <h3 style="text-align: center;">Schedule Follow-up</h3>
+            <p>Patient: <strong id="schedulePatientName"></strong></p>
+            
+            <div style="display: flex; flex-direction: column; gap: 15px; margin-top: 15px;">
+                <label for="nextDateTimeInput">Appointment Date & Time:</label>
+                <input type="datetime-local" id="nextDateTimeInput" class="form-control">
+                
+                <button class="btn btn-primary" onclick="confirmSchedule()" style="width: 100%;">
+                    Save Appointment
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <%- include('includes/navbar.ejs', { userRole: userRole, currentPage: 'appointment' }) %>
+
+    <script src="/js/main.js"></script>
+    <script src="/js/appointment.js"></script>
+</body>
+</html>

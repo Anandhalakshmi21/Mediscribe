@@ -1,0 +1,884 @@
+/* Doctor Home Specific Styles */
+.home-doctor h2 {
+    margin-bottom: 20px;
+    color: var(--color-primary-blue);
+    font-size: 1.5em;
+}
+
+.next-appointment-box {
+    background-color: var(--color-primary-blue);
+    color: var(--color-white);
+    padding: 20px;
+    border-radius: 12px;
+    margin-bottom: 20px;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.next-appointment-box:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+}
+
+.box-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.box-header h3 {
+    font-size: 1.3em;
+    border-bottom: 2px solid var(--color-white);
+    padding-bottom: 5px;
+}
+
+.patient-details p {
+    margin: 5px 0;
+    font-size: 1.05em;
+}
+
+.quick-start {
+    margin-top: 15px;
+    width: 100%;
+    background-color: var(--color-secondary-green);
+}
+
+.quick-stats {
+    display: flex;
+    gap: 15px;
+}
+
+.stat-card {
+    flex: 1;
+    padding: 15px;
+    border-radius: 10px;
+    color: var(--color-white);
+    text-align: center;
+}
+
+.stat-card.blue-bg { background-color: #4b92e7; }
+.stat-card.green-bg { background-color: var(--color-secondary-green); }
+
+.stat-card h4 { font-size: 1em; margin-bottom: 5px; }
+.stat-card p { font-size: 1.8em; font-weight: bold; }
+
+
+/* Assistant Home Specific Styles */
+.add-appointment-btn {
+    background-color: var(--color-secondary-green);
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.add-appointment-btn .material-icons {
+    margin-right: 8px;
+}
+
+.todays-appointments h3 {
+    color: var(--color-primary-blue);
+    margin-bottom: 15px;
+}
+
+.appointment-item {
+    background-color: var(--color-white);
+    padding: 15px;
+    margin-bottom: 10px;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px var(--color-box-shadow);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.token-number {
+    font-size: 1.5em;
+    font-weight: bold;
+    color: var(--color-danger-red);
+    margin-right: 15px;
+}
+
+.patient-info {
+    flex-grow: 1;
+}
+
+.patient-info p {
+    margin: 0;
+}
+
+.patient-info .time {
+    font-size: 0.8em;
+    color: var(--color-text-light);
+}
+
+.btn-upload {
+    background-color: var(--color-primary-blue);
+    color: var(--color-white);
+    padding: 8px 15px;
+    border-radius: 6px;
+    font-size: 0.9em;
+    display: flex;
+    align-items: center;
+}
+
+.btn-upload .material-icons {
+    font-size: 18px;
+    margin-right: 5px;
+}
+
+/* Modal for New Appointment */
+.modal {
+    display: none; /* Hidden by default */
+    position: fixed;
+    z-index: 200;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background-color: rgba(0,0,0,0.4); /* Black w/ opacity */
+}
+
+.modal-content {
+    background-color: #fefefe;
+    margin: 15% auto; /* 15% from the top and centered */
+    padding: 20px;
+    border-radius: 10px;
+    width: 90%; 
+    max-width: 450px;
+    position: relative;
+    animation: fadeIn 0.3s;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.close-btn {
+    color: #aaa;
+    float: right;
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.modal-content h3 {
+    color: var(--color-primary-blue);
+    margin-bottom: 15px;
+}
+
+.modal-content input, .modal-content select {
+    width: 100%;
+    padding: 10px;
+    margin-bottom: 10px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+}
+
+.inline-group {
+    display: flex;
+    gap: 10px;
+}
+
+.inline-group input {
+    flex: 1;
+}
+
+.token-note {
+    font-size: 0.85em;
+    color: var(--color-text-light);
+    margin-bottom: 15px;
+    text-align: center;
+}
+
+/* ... (Previous role-styles content) ... */
+
+/* Appointment Page Styles */
+.appointment-page h2 {
+    color: var(--color-primary-blue);
+    margin-bottom: 20px;
+    font-size: 1.4em;
+}
+
+.icon-btn {
+    background: none;
+    border: none;
+    color: var(--color-primary-blue);
+    cursor: pointer;
+    padding: 5px;
+}
+
+.icon-btn .material-icons {
+    font-size: 28px;
+}
+
+.appointment-list {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.patient-card {
+    background-color: var(--color-white);
+    padding: 15px;
+    border-radius: 10px;
+    box-shadow: 0 2px 5px var(--color-box-shadow);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-left: 5px solid var(--color-secondary-green); /* Status indicator */
+}
+
+.patient-details {
+    flex-grow: 1;
+}
+
+.patient-details .name {
+    font-weight: bold;
+    font-size: 1.1em;
+    color: var(--color-text-dark);
+}
+
+.patient-details .id {
+    font-size: 0.85em;
+    color: var(--color-text-light);
+}
+
+.patient-actions {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.action-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 1px solid #ccc;
+    background-color: var(--color-background-light);
+    color: var(--color-text-dark);
+    cursor: pointer;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    transition: background-color 0.2s, color 0.2s;
+    position: relative;
+}
+
+.action-btn .material-icons {
+    font-size: 20px;
+}
+
+.start-consult-btn {
+    background-color: var(--color-primary-blue);
+    color: var(--color-white);
+}
+
+.start-consult-btn:hover {
+    background-color: #0056b3;
+}
+
+.history-btn {
+    background-color: var(--color-background-light); 
+    color: var(--color-primary-blue); 
+    border: 1px solid var(--color-primary-blue);
+}
+
+.history-btn:hover {
+    background-color: #eee;
+}
+
+.history-btn .material-icons {
+    /* Ensure the icon renders the correct symbol */
+    font-size: 20px;
+    content: 'history';
+}
+
+/* Next Appointment Date Picker */
+.next-appt-input {
+    width: 100%; /* Make it small */
+    height: 100%;
+    opacity: 0; /* Hide the default input box */
+    position: absolute;
+    top: 0;
+    left: 0;
+    cursor: pointer;
+    z-index: 10; /* Put it above the icon */
+}
+
+.calendar-icon {
+    font-size: 20px;
+    color: var(--color-secondary-green);
+    position: relative;
+    pointer-events: none; /* Icon does not interfere with clicking the hidden input */
+    z-index: 1;
+}
+
+.calendar-group {
+    position: relative; /* All children (input, icon) position relative to this */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background-color: var(--color-background-light);
+}
+
+/* History Modal Specifics */
+.modal-content.large-modal {
+    max-width: 550px;
+}
+
+.modal-content.small-modal {
+    max-width: 300px;
+    text-align: center;
+}
+
+.history-content {
+    background-color: #f8f8f8;
+    padding: 15px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    border-left: 3px solid var(--color-primary-blue);
+}
+
+.history-content p {
+    margin: 5px 0;
+    font-size: 0.95em;
+}
+
+.history-content .summary-note {
+    margin-top: 10px;
+    font-style: italic;
+    color: var(--color-danger-red);
+}
+
+/* ... (Previous role-styles content) ... */
+
+/* History Page Styles */
+.search-container {
+    margin-bottom: 25px;
+}
+
+.search-bar {
+    background-color: var(--color-white);
+    padding: 0;
+    border: 1px solid var(--color-primary-blue);
+    border-radius: 25px;
+    box-shadow: 0 1px 3px var(--color-box-shadow);
+}
+
+.search-bar input {
+    border: none;
+    padding: 10px 15px;
+}
+
+.section-title {
+    font-size: 1.3em;
+    color: var(--color-secondary-green);
+    margin-bottom: 15px;
+    border-bottom: 2px solid #ddd;
+    padding-bottom: 5px;
+}
+
+/* History List Styling */
+.history-list {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.date-group {
+    border: 1px solid #e0e0e0;
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.date-header {
+    background-color: var(--color-primary-blue);
+    color: var(--color-white);
+    padding: 10px 15px;
+    font-size: 1.1em;
+    margin: 0;
+}
+
+.history-item {
+    background-color: var(--color-white);
+    border-bottom: 1px solid #f0f0f0;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.history-item:hover {
+    background-color: #f5f5f5;
+}
+
+.item-summary {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px;
+}
+
+.item-summary .name {
+    font-weight: bold;
+    flex-basis: 50%;
+}
+
+.item-summary .id {
+    font-size: 0.9em;
+    color: var(--color-text-light);
+    flex-basis: 30%;
+    text-align: right;
+}
+
+.expand-icon {
+    transition: transform 0.3s;
+    color: var(--color-secondary-green);
+}
+
+.item-details {
+    display: none;
+    padding: 0 15px 15px 15px;
+    border-top: 1px dashed #e0e0e0;
+}
+
+.item-details.open {
+    display: block;
+    animation: slideDown 0.3s ease-out;
+}
+
+.history-item .item-summary.active .expand-icon {
+    transform: rotate(180deg);
+}
+
+@keyframes slideDown {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.item-details h4 {
+    color: var(--color-primary-blue);
+    margin-bottom: 10px;
+}
+
+.item-details p {
+    margin: 3px 0;
+    font-size: 0.9em;
+}
+
+.btn-details {
+    background-color: var(--color-secondary-green);
+    color: var(--color-white);
+    padding: 8px 15px;
+    border-radius: 5px;
+    margin-top: 10px;
+    display: block;
+    width: 100%;
+}
+
+
+/* Profile Page Styles */
+.profile-page {
+    background-color: var(--color-background-light);
+}
+
+.logout-btn {
+    color: var(--color-danger-red);
+}
+
+.profile-card {
+    background-color: var(--color-white);
+    padding: 20px;
+    border-radius: 12px;
+    box-shadow: 0 4px 8px var(--color-box-shadow);
+    text-align: center;
+    margin-bottom: 25px;
+}
+
+.profile-header h2 {
+    color: var(--color-primary-blue);
+    margin-top: 10px;
+    font-size: 1.5em;
+}
+
+.profile-header .specialization {
+    color: var(--color-text-light);
+    font-style: italic;
+    margin-bottom: 20px;
+}
+
+.profile-photo-container {
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    overflow: hidden;
+    margin: 0 auto;
+    border: 3px solid var(--color-secondary-green);
+    position: relative;
+    cursor: pointer;
+}
+
+.profile-photo-container img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.edit-icon {
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    background-color: rgba(0, 0, 0, 0.6);
+    color: var(--color-white);
+    padding: 5px;
+    border-radius: 50%;
+    font-size: 18px;
+}
+
+.detail-row {
+    display: flex;
+    align-items: center;
+    margin: 10px 0;
+    padding: 5px 0;
+    border-bottom: 1px dashed #eee;
+}
+
+.detail-row .material-icons {
+    color: var(--color-secondary-green);
+    margin-right: 15px;
+}
+
+/* Info and Settings Sections */
+.info-section {
+    margin-bottom: 30px;
+}
+
+.info-section h3 {
+    display: flex;
+    align-items: center;
+    color: var(--color-primary-blue);
+    margin-bottom: 15px;
+    font-size: 1.2em;
+}
+
+.info-section h3 .material-icons {
+    margin-right: 8px;
+}
+
+.info-box, .settings-group {
+    background-color: var(--color-white);
+    padding: 15px;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px var(--color-box-shadow);
+}
+
+textarea {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    resize: vertical;
+    font-size: 0.9em;
+    margin-bottom: 10px;
+}
+
+.settings-group {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.settings-group label {
+    font-weight: bold;
+}
+
+/* Metrics Grid */
+.metrics-grid {
+    display: flex;
+    gap: 15px;
+}
+
+.metric-card {
+    flex: 1;
+    padding: 15px;
+    border-radius: 10px;
+    color: var(--color-white);
+    text-align: center;
+}
+
+.metric-card h4 { font-size: 0.9em; margin-bottom: 5px; }
+.metric-card p { font-size: 1.6em; font-weight: bold; }
+
+/* Dark Mode Styles */
+body.dark-mode {
+    background-color: #121212;
+    color: var(--color-white);
+}
+body.dark-mode .main-header, 
+body.dark-mode .profile-card, 
+body.dark-mode .info-box,
+body.dark-mode .settings-group {
+    background-color: #1e1e1e;
+    color: var(--color-white);
+}
+
+/* In dark mode, adjust text areas and inputs */
+body.dark-mode textarea, 
+body.dark-mode select {
+    background-color: #2c2c2c;
+    color: var(--color-white);
+    border-color: #444;
+}
+
+body.dark-mode .detail-row {
+    border-bottom: 1px dashed #333;
+}
+
+/* ... (Previous role-styles content) ... */
+
+/* Transcribe Page Styles */
+.transcribe-page {
+    position: relative;
+    display: flex; /* Enable flexible layout for transcription area and sidebar */
+    padding-right: 0; /* Remove default padding to allow sidebar to touch edge */
+    padding-top: 10px;
+    padding-bottom: 120px; /* Space for fixed bottom controls */
+}
+
+.end-session-btn {
+    color: var(--color-danger-red);
+}
+
+.transcription-area {
+    flex-grow: 1;
+    padding: 0 20px;
+    min-height: 70vh;
+}
+
+.transcription-output {
+    background-color: var(--color-white);
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    padding: 15px;
+    min-height: 400px;
+    white-space: pre-wrap; /* Preserve formatting */
+    overflow-y: auto;
+    line-height: 1.8;
+    box-shadow: 0 2px 4px var(--color-box-shadow);
+}
+
+.status-message {
+    font-style: italic;
+    color: var(--color-text-light);
+    text-align: center;
+    padding: 10px;
+}
+
+/* Prediction Sidebar */
+.prediction-sidebar {
+    width: 0; /* Hidden by default */
+    background-color: #e9f5ff; /* Light blue background */
+    border-left: 1px solid var(--color-primary-blue);
+    position: fixed;
+    right: 0;
+    top: 60px; /* Below the header */
+    bottom: 0;
+    overflow-y: auto;
+    transition: width 0.3s ease-in-out;
+    padding: 0;
+    z-index: 90;
+}
+
+.prediction-sidebar.open {
+    width: 280px; /* Width when open */
+    padding: 20px 15px;
+}
+
+.prediction-sidebar h3 {
+    color: var(--color-primary-blue);
+    border-bottom: 2px solid #cce5ff;
+    padding-bottom: 10px;
+    margin-bottom: 15px;
+    font-size: 1.3em;
+}
+
+.prediction-item {
+    margin-bottom: 20px;
+    padding: 10px;
+    background-color: var(--color-white);
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.prediction-item h4 {
+    display: flex;
+    align-items: center;
+    color: var(--color-secondary-green);
+    margin-bottom: 5px;
+    font-size: 1em;
+}
+
+.prediction-item h4 .material-icons {
+    margin-right: 5px;
+    font-size: 18px;
+}
+
+.prediction-item ul {
+    list-style: disc inside;
+    margin-left: 5px;
+    padding-left: 0;
+    font-size: 0.9em;
+    color: var(--color-text-dark);
+}
+
+/* Fixed Bottom Control Bar */
+.transcribe-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background-color: var(--color-white);
+    border-top: 1px solid #e0e0e0;
+    box-shadow: 0 -2px 5px var(--color-box-shadow);
+    padding: 10px 20px;
+    z-index: 100;
+}
+
+.mic-controls {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.mic-btn {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    border: none;
+    font-size: 28px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    transition: transform 0.2s;
+}
+
+.start-mic-btn {
+    background-color: var(--color-secondary-green);
+    color: var(--color-white);
+}
+
+.start-mic-btn:hover {
+    background-color: #1e7e34;
+}
+
+.action-btn { /* Pause button */
+    background-color: var(--color-primary-blue);
+    color: var(--color-white);
+    width: 45px;
+    height: 45px;
+    font-size: 20px;
+}
+
+.danger-btn { /* Stop button */
+    background-color: var(--color-danger-red);
+    color: var(--color-white);
+    width: 45px;
+    height: 45px;
+    font-size: 20px;
+}
+
+.utility-controls {
+    display: flex;
+    gap: 15px;
+    align-items: center;
+}
+
+.upload-btn, .edit-btn {
+    padding: 8px 10px;
+    font-size: 0.9em;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    max-width: 150px; 
+    white-space: nowrap; 
+}
+
+.upload-btn {
+    background-color: #ffc107; /* Yellow/Orange for attention */
+    color: var(--color-text-dark);
+}
+
+.edit-btn {
+    background-color: #f0f0f0;
+    color: var(--color-text-dark);
+}
+
+.upload-btn .material-icons, .edit-btn .material-icons {
+    margin-right: 5px;
+    font-size: 20px;
+}
+
+/* Dropdown Menu for Upload Options */
+.dropdown {
+    position: relative;
+    display: inline-block;
+}
+
+.dropdown-content {
+    display: none;
+    position: absolute;
+    background-color: var(--color-white);
+    min-width: 180px;
+    box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+    z-index: 1;
+    bottom: 100%; /* Appears above the button */
+    right: 0;
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.dropdown-content a {
+    color: var(--color-text-dark);
+    padding: 12px 16px;
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+}
+
+.dropdown-content a:hover {
+    background-color: #f1f1f1;
+}
+
+.dropdown-content a .material-icons {
+    margin-right: 8px;
+}
+
+/* QR Code Modal Styling */
+.qr-code-img {
+    width: 150px;
+    height: 150px;
+    border: 5px solid var(--color-primary-blue);
+    display: block;
+    margin: 15px auto;
+}
+
+.qr-link {
+    font-size: 0.8em;
+    color: var(--color-text-light);
+    overflow-wrap: break-word;
+}
+
+.save-btn {
+    background-color: var(--color-primary-blue); /* Use your primary color */
+    color: var(--color-white);
+    padding: 10px 15px;
+    border-radius: 6px;
+    font-weight: bold;
+    /* Ensure it has the same style properties as other controls */
+}

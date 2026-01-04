@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Doctor Home</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="/css/role-styles.css">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+</head>
+<body class="page-container">
+
+    <header class="main-header">
+        <div class="app-info">
+            <span class="app-logo">⚕️</span>
+            <h1>Clinical Assistant</h1>
+        </div>
+        <div class="header-action">
+            <span class="material-icons">notifications</span>
+        </div>
+    </header>
+
+    <main class="content-area home-doctor">
+        <h2>Welcome Back, Dr. <%= (typeof doctorName !== 'undefined' ? doctorName : 'User') %></h2>
+        
+        <div class="next-appointment-box">
+            <div class="box-header">
+                <h3>Next Appointment</h3>
+                <span class="material-icons next-icon">access_time</span>
+            </div>
+            <div class="patient-details">
+                <% if (typeof nextAppointment !== 'undefined' && nextAppointment) { %>
+                    <p>Patient: **<%= nextAppointment.firstname %> <%= nextAppointment.lastname %>**</p>
+                    <p>ID: **<%= nextAppointment.patientid %>**</p>
+                    <p>Time: **<%= nextAppointment.Time %>**</p>
+                    <button onclick="window.location.href='/transcribe?patientId=<%= nextAppointment.patientid %>'" class="btn-start-consultation">Start Consultation</button>
+                <% } else { %>
+                    <p>No scheduled appointments today.</p>
+                <% } %>
+            </div>
+        </div>
+
+        <section class="quick-stats">
+            <div class="stat-card blue-bg">
+                <h4>Today's Patients</h4>
+                <p><%= appointmentStats.today %></p>
+            </div>
+            <div class="stat-card green-bg">
+                <h4>Pending Tasks</h4>
+                <p><%= appointmentStats.pending %></p>
+            </div>
+        </section>
+
+    </main>
+
+    <% 
+        const userRole = 'doctor';
+        const currentPage = 'home';
+    %>
+
+    <%- include('includes/navbar.ejs', { userRole: userRole, currentPage: currentPage }) %>
+
+    <script src="/js/main.js"></script>
+</body>
+</html>
