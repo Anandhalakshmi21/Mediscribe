@@ -882,3 +882,43 @@ body.dark-mode .detail-row {
     font-weight: bold;
     /* Ensure it has the same style properties as other controls */
 }
+
+/* Recording Indicator Animations */
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+        box-shadow: 0 0 0 0 rgba(44, 180, 112, 0.7);
+    }
+    50% {
+        opacity: 0.8;
+    }
+    100% {
+        opacity: 1;
+        box-shadow: 0 0 0 10px rgba(44, 180, 112, 0);
+    }
+}
+
+.start-mic-btn.recording {
+    animation: pulse 1.5s infinite;
+    box-shadow: inset 0 0 0 2px var(--color-white);
+}
+
+.status-message.active {
+    color: var(--color-secondary-green);
+    font-weight: 500;
+}
+
+.status-message.inactive {
+    color: var(--color-text-light);
+    font-weight: normal;
+}
+
+/* Transcription text styling */
+.transcription-output p {
+    margin-bottom: 8px;
+    word-wrap: break-word;
+}
+
+.transcription-output p:last-child {
+    margin-bottom: 0;
+}

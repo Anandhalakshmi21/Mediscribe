@@ -1,262 +1,310 @@
+let mediaRecorder;
+let audioChunks = [];
 let isRecording = false;
-let isPaused = false;
-const outputDiv = document.getElementById('transcriptionOutput');
-const startBtn = document.getElementById('startMic');
-const pauseBtn = document.getElementById('pauseMic');
-const stopBtn = document.getElementById('stopMic');
-const sidebar = document.getElementById('predictionSidebar');
-const setNextApptBtn = document.getElementById('setNextApptBtn');
-let transcriptionInterval;
+let fullTranscript = "";
 
-/**
- * Initializes the recording session.
- */
-function startRecording() {
-    if (isRecording) {
-        return; // Already recording
+const startBtn = document.getElementById("startMic");
+const pauseBtn = document.getElementById("pauseMic");
+const stopBtn = document.getElementById("stopMic");
+const outputDiv = document.getElementById("transcriptionOutput");
+
+// 🔴 Replace with your ngrok URL
+const API_URL = "https://helene-overdogmatic-seth.ngrok-free.dev/transcribe";
+// ⚠️ WARNING: The Gemini API key will be exposed in client-side code.
+// Only use this for testing. Replace with your key or add a backend proxy for production.
+const GEMINI_API_KEY = "AIzaSyDstac80iUPuDwuN9nTzb8Ow95I9Pbu7pg";
+
+// ----------------------------
+// START RECORDING
+// ----------------------------
+// async function startRecording() {
+//     try {
+//         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+//         // mediaRecorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
+//         mediaRecorder = new MediaRecorder(stream);
+
+//         mediaRecorder.ondataavailable = event => {
+//             if (event.data.size > 0) {
+//                 audioChunks.push(event.data);
+//             }
+//         };
+
+//         mediaRecorder.onstop = async () => {
+//             const blob = new Blob(audioChunks, { type: "audio/wav" });
+//             audioChunks = [];
+
+//             await sendAudioChunk(blob);
+
+//             // After final chunk sent, call backend LLM to fix/clean the live transcript
+//             try {
+//                 // await callFixTranscript();
+//             } catch (e) {
+//                 console.error('Error calling fix transcript on stop:', e);
+//             }
+//         };
+
+//         mediaRecorder.start();
+//         isRecording = true;
+
+//         // UI updates
+//         startBtn.style.display = "none";
+//         pauseBtn.style.display = "inline-block";
+//         stopBtn.style.display = "inline-block";
+
+//         outputDiv.innerHTML = `<p class="status-message active">Recording...</p>`;
+
+//         // Send chunk every 4 seconds (REST pseudo-streaming)
+//         setInterval(() => {
+//             if (isRecording) {
+//                 mediaRecorder.stop();
+//                 mediaRecorder.start();
+//             }
+//         }, 2000);
+
+//     } catch (err) {
+//         console.error("Mic access error:", err);
+//         alert("Microphone access denied.");
+//     }
+// }
+
+async function startRecording() {
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+        // ✅ Explicitly record as webm (opus)
+        mediaRecorder = new MediaRecorder(stream, {
+            mimeType: "audio/webm;codecs=opus"
+        });
+
+        mediaRecorder.ondataavailable = event => {
+            if (event.data.size > 0) {
+                audioChunks.push(event.data);
+            }
+        };
+
+        mediaRecorder.onstop = async () => {
+            const blob = new Blob(audioChunks, {
+                type: "audio/webm"
+            });
+
+            audioChunks = [];
+
+            await sendAudioChunk(blob);
+        };
+
+        mediaRecorder.start();
+        isRecording = true;
+
+        // UI updates
+        startBtn.style.display = "none";
+        pauseBtn.style.display = "inline-block";
+        stopBtn.style.display = "inline-block";
+
+        outputDiv.innerHTML = `<p class="status-message active">Recording...</p>`;
+
+        // ✅ Save interval reference (avoid duplicates)
+        chunkInterval = setInterval(() => {
+            if (isRecording && mediaRecorder.state === "recording") {
+                mediaRecorder.stop();
+                mediaRecorder.start();
+            }
+        }, 2000);
+
+    } catch (err) {
+        console.error("Mic access error:", err);
+        alert("Microphone access denied.");
     }
-    
-    isRecording = true;
-    isPaused = false;
-    console.log("Recording started...");
-
-    // Update UI
-    startBtn.style.display = 'none';
-    pauseBtn.style.display = 'flex';
-    stopBtn.style.display = 'flex';
-    sidebar.classList.add('open');
-    setNextApptBtn.style.display = 'none';
-
-    outputDiv.innerHTML = '<p class="status-message active">Recording... Please begin consultation.</p>';
-    
-    // Simulate real-time transcription update
-    transcriptionInterval = setInterval(simulateTranscription, 3000);
 }
 
-/**
- * Pauses the recording session.
- */
+// ----------------------------
+// PAUSE RECORDING
+// ----------------------------
 function pauseRecording() {
-    if (!isRecording || isPaused) {
-        return;
+    if (mediaRecorder && isRecording) {
+        mediaRecorder.pause();
+        
+        // UI update
+        pauseBtn.textContent = "Resume";
+        
+        outputDiv.innerHTML += `<p class="status-message paused">Paused...</p>`;
+
+        // Call backend LLM to fix/clean the live transcript for an ortho doctor
+        try {
+            // callFixTranscript();
+        } catch (e) {
+            console.error('Error calling fix transcript on pause:', e);
+        }
     }
-    isPaused = true;
-    clearInterval(transcriptionInterval);
-    console.log("Recording paused.");
-    outputDiv.innerHTML += '<p class="status-message active">[Recording Paused]</p>';
-    
-    // Update UI: Pause button icon might change or remain pause depending on design choice
-    pauseBtn.querySelector('.material-icons').textContent = 'play_arrow';
 }
 
-/**
- * Resumes the recording session.
- */
-function resumeRecording() {
-    if (!isRecording || !isPaused) {
-        return;
-    }
-    isPaused = false;
-    console.log("Recording resumed.");
-    outputDiv.innerHTML += '<p class="status-message active">[Recording Resumed]</p>';
-    
-    // Update UI
-    pauseBtn.querySelector('.material-icons').textContent = 'pause';
-    transcriptionInterval = setInterval(simulateTranscription, 3000);
-}
+// ----------------------------
+// STOP RECORDING
+// ----------------------------
+// function stopRecording() {
+//     if (mediaRecorder) {
+//         isRecording = false;
+//         mediaRecorder.stop();
 
-/**
- * Stops the recording session, finalizing the transcript.
- */
+//         startBtn.style.display = "inline-block";
+//         pauseBtn.style.display = "none";
+//         stopBtn.style.display = "none";
+//     }
+// }
+
 function stopRecording() {
-    if (!isRecording) {
-        return;
-    }
-    
-    isRecording = false;
-    isPaused = false;
-    clearInterval(transcriptionInterval);
-    console.log("Recording stopped. Finalizing transcript and running prediction analysis.");
+    if (mediaRecorder) {
+        isRecording = false;
 
-    // Update UI
-    startBtn.style.display = 'flex';
-    pauseBtn.style.display = 'none';
-    stopBtn.style.display = 'none';
-    sidebar.classList.remove('open');
-    setNextApptBtn.style.display = 'block';
+        clearInterval(chunkInterval); // ✅ prevent multiple intervals
 
-    outputDiv.innerHTML += '<p class="status-message inactive">--- END OF CONSULTATION ---</p>';
-
-    // In a real app, send final transcript to DB and AI for final predictions
-    
-    // Enable "Set Next Appointment" button
-    document.getElementById('setNextApptBtn').style.display = 'block';
-}
-
-/**
- * Simulates real-time transcription updates.
- */
-function simulateTranscription() {
-    const transcriptions = [
-        "Doctor: So, tell me about your symptoms. How long have they persisted?",
-        "Patient: It started about three days ago. A persistent, dry cough and I feel very weak.",
-        "Doctor: I see. Have you taken your temperature recently? Any history of this illness?",
-        "Patient: My temperature was 100.4°F this morning. No, this is new for me.",
-        "Doctor: Alright. We will start with a brief examination and then discuss potential tests."
-    ];
-    
-    const newText = transcriptions[Math.floor(Math.random() * transcriptions.length)];
-    
-    // Append new text, remove status message if present
-    const status = outputDiv.querySelector('.status-message.active');
-    if (status) {
-        outputDiv.removeChild(status);
-    }
-    
-    outputDiv.innerHTML += `<p>${newText}</p>`;
-    // Scroll to the bottom
-    outputDiv.scrollTop = outputDiv.scrollHeight; 
-}
-
-/**
- * Handles toggling the visibility of the Upload drop-down menu.
- */
-function toggleUploadDropdown() {
-    const dropdownContent = document.getElementById("uploadDropdownContent");
-    if (dropdownContent.style.display === "block") {
-        dropdownContent.style.display = "none";
-    } else {
-        dropdownContent.style.display = "block";
-    }
-}
-
-document.addEventListener('click', (event) => {
-    const dropdown = document.querySelector('.dropdown');
-    const dropdownContent = document.getElementById("uploadDropdownContent");
-    
-    // Check if the dropdown content exists and if the click was NOT on the dropdown button itself
-    if (dropdownContent && dropdown) {
-        const isClickInsideDropdown = dropdown.contains(event.target);
-
-        if (!isClickInsideDropdown && dropdownContent.style.display === 'block') {
-            // Close the dropdown
-            dropdownContent.style.display = 'none';
+        if (mediaRecorder.state !== "inactive") {
+            mediaRecorder.stop();
         }
-    }
-});
 
-/**
- * Handles file selection from the user's system.
- * @param {Event} event - The file input change event.
- */
-function handleFileUpload(event) {
-    const file = event.target.files[0];
-    if (file) {
-        console.log(`File selected: ${file.name}. Ready to upload and associate with patient.`);
-        alert(`File "${file.name}" uploaded and associated with patient.`);
-        // In a real app: upload file via AJAX, get URL, store in DB.
+        // UI updates
+        startBtn.style.display = "inline-block";
+        pauseBtn.style.display = "none";
+        stopBtn.style.display = "none";
     }
 }
 
-/**
- * Shows the modal for the patient QR code upload option.
- */
-function showQrModal() {
-    // In a real app: Generate a unique, time-sensitive QR code linking to a file upload portal
-    document.getElementById('qrCodeModal').style.display = 'block';
-    console.log('QR Code Modal displayed.');
-    toggleUploadMenu(); // Close the dropdown menu
-}
 
-/**
- * Shows the modal for editing the consultation notes/transcript.
- */
-function openEditModal() {
-    // Populate the modal with the current transcript content
-    const fullTranscript = Array.from(outputDiv.querySelectorAll('p')).map(p => p.textContent).join('\n');
-    document.getElementById('editableNotes').value = fullTranscript;
-    document.getElementById('editModal').style.display = 'block';
-}
+// ----------------------------
+// SEND AUDIO TO BACKEND
+// ----------------------------
+// async function sendAudioChunk(blob) {
+//     try {
+//         const formData = new FormData();
+//         formData.append("file", blob, "chunk.webm");
 
-/**
- * Saves the edited notes back to the main transcript and DB (simulated).
- */
-function saveEditedNotes() {
-    const editedText = document.getElementById('editableNotes').value;
-    
-    // Update the main transcription area
-    outputDiv.innerHTML = editedText.split('\n').map(line => `<p>${line}</p>`).join('');
-    outputDiv.innerHTML += '<p class="status-message inactive">[Notes edited and saved]</p>';
-    
-    // In a real app: Send editedText to the backend for storage
-    console.log("Edited notes saved successfully.");
-    closeModal('editModal');
-}
+//         const response = await fetch(API_URL, {
+//             method: "POST",
+//             body: formData
+//         });
 
-/**
- * Prompts the doctor before ending the entire session.
- */
-function endSessionPrompt() {
-    if (confirm('Are you sure you want to end the consultation? All unsaved work will be lost.')) {
-        stopRecording();
-        console.log("Session ended by user action. Redirecting to Appointment List.");
-        // After ending, typically redirect to the Appointment list or a summary page
-        window.location.href = '/appointment'; 
+//         const data = await response.json();
+
+//         if (data.transcription) {
+//             // 🔹 Remove non-English characters
+//             const englishOnly = data.transcription.replace(
+//                 /[^a-zA-Z0-9.,!?'"()\-\s]/g,
+//                 ""
+//             );
+
+//             fullTranscript += " " + englishOnly;
+
+//             outputDiv.innerHTML = `
+//                 <div class="live-text">
+//                     ${fullTranscript}
+//                 </div>
+//             `;
+//         }
+
+//     } catch (error) {
+//         console.error("Upload error:", error);
+//     }
+// }
+
+async function sendAudioChunk(blob) {
+    try {
+        const formData = new FormData();
+
+        // ✅ filename matches format
+        formData.append("file", blob, "chunk.webm");
+
+        const response = await fetch(API_URL, {
+            method: "POST",
+            body: formData
+        });
+
+        const data = await response.json();
+
+        if (data.transcription) {
+            const englishOnly = data.transcription.replace(
+                /[^a-zA-Z0-9.,!?'"()\-\s]/g,
+                ""
+            );
+
+            fullTranscript += " " + englishOnly;
+
+            document.getElementById("transcriptionOutput").innerHTML =
+                `<div class="live-text">${fullTranscript}</div>`;
+        }
+
+    } catch (error) {
+        console.error("Upload error:", error);
     }
 }
 
-/**
- * Shows the modal to set the next appointment date (after consultation is stopped).
- */
-function showNextAppointmentSelector() {
-    document.getElementById('nextAppointmentModal').style.display = 'block';
-}
 
 /**
- * Finalizes the follow-up appointment setting.
+ * Calls backend LLM (Gemini proxy) to fix and format the current live transcript
+ * into notes an orthopaedic doctor would use.
  */
-function finalizeNextAppointment() {
-    const date = document.getElementById('followUpDateInput').value;
-    if (date) {
-        console.log(`Next appointment set for ${date}`);
-        alert(`Follow-up appointment scheduled for ${date}.`);
-        closeModal('nextAppointmentModal');
-        // Redirect back to appointment page
-        window.location.href = '/appointment'; 
-    } else {
-        alert('Please select a date.');
-    }
-}
+async function callFixTranscript() {
+    const liveEl = document.querySelector('.live-text');
+    if (!liveEl) return;
+    const text = liveEl.innerText.trim();
+    if (!text) return;
 
-function saveConsultationRecord(patientId) {
-    // 1. Get the final transcription text (Simulated)
-    const transcriptionText = document.getElementById('transcriptionOutput').innerText; 
+    // Show inline status
+    const statusP = document.createElement('p');
+    statusP.className = 'status-message active';
+    statusP.textContent = '🛠️ Fixing transcript for ortho doctor...';
+    outputDiv.appendChild(statusP);
 
-    console.log(`Saving record for ${patientId}. Length: ${transcriptionText.length} characters.`);
-    
-    // 2. Perform the server update (Using the route we established earlier)
-    fetch('/complete-appointment', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ 
-            patientId: patientId, 
-            recordContent: transcriptionText // Pass the actual transcription content
-        })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            alert(`Record for ${patientId} saved successfully! Returning to Appointment list.`);
-            // 3. Redirect back to the Appointments page after successful save
-            window.location.href = '/appointment'; 
+    try {
+        const systemInstruction = "You are an orthopaedic doctor. Fix, clean, and format the transcript into clinical notes an orthopaedic surgeon would use. Use precise medical terminology, correct grammar. Return only the fixed notes.";
+
+        const promptText = `SYSTEM INSTRUCTION:\n${systemInstruction}\n\nTRANSCRIPT:\n${text}
+        DO NOT ADD ANYTHING OTHER THAN THE FIXED TRANSCRIPT. DO NOT RETURN ANY EXPLANATIONS. ONLY RETURN THE FIXED TRANSCRIPT AS THE OUTPUT.
+        `;
+
+        const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent';
+
+        const resp = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                // quickstart uses x-goog-api-key header
+                'x-goog-api-key': GEMINI_API_KEY
+            },
+            body: JSON.stringify({
+                contents: [
+                    {
+                        parts: [
+                            { text: promptText }
+                        ]
+                    }
+                ]
+            })
+        });
+
+        if (resp.ok) {
+            const j = await resp.json();
+
+            // Try multiple possible response shapes
+            let fixed = '';
+            if (j.candidates && j.candidates.length) {
+                fixed = j.candidates[0].output || (j.candidates[0].content && j.candidates[0].content.map(c => c.text).join('')) || '';
+            }
+            if (!fixed && j.output && j.output.length) {
+                fixed = j.output.map(o => (o.content || []).map(c => c.text || '').join('')).join('\n');
+            }
+            if (!fixed) fixed = j.outputText || j.result || j.text || j.fixed_transcript || '';
+
+            if (fixed) {
+                fullTranscript = fixed;
+                outputDiv.innerHTML = `<div class="live-text">${fixed}</div>`;
+            }
         } else {
-            alert('Error saving record. Please try again.');
+            console.error('Gemini API responded with error', resp.status, resp.statusText);
         }
-    })
-    .catch(error => {
-        console.error('Network error during save:', error);
-        alert('Could not save record due to a network error.');
-    });
+    } catch (err) {
+        console.error('callFixTranscript error:', err);
+    } finally {
+        const s = outputDiv.querySelector('.status-message.active');
+        if (s) s.remove();
+    }
 }
