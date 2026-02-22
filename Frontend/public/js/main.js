@@ -33,3 +33,22 @@ document.addEventListener('DOMContentLoaded', () => {
     
     
 });
+
+// --------------------------
+// Upload Options Dropdown
+// --------------------------
+function toggleUploadDropdown() {
+    const dropdown = document.getElementById("uploadDropdownContent");
+    dropdown.classList.toggle("show");
+}
+
+// Close dropdown if clicking outside
+window.addEventListener("click", function(event) {
+    // If the click is NOT on the upload button or the dropdown itself
+    if (!event.target.matches('.upload-btn') && !event.target.closest('.dropdown-content')) {
+        const dropdown = document.getElementById("uploadDropdownContent");
+        if (dropdown.classList.contains("show")) {
+            dropdown.classList.remove("show");
+        }
+    }
+});

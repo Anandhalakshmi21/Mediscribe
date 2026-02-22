@@ -6,6 +6,13 @@ import { fileURLToPath } from 'url';
 import { dirname } from 'path';  
 import session from "express-session";   
 import multer from 'multer';
+import QRCode from "qrcode";
+import fs from "fs";
+import Tesseract from "tesseract.js";
+import { createRequire } from "module";
+const require = createRequire(import.meta.url);
+
+const pdf = require("pdf-parse");
 
 dotenv.config();
 
@@ -449,6 +456,145 @@ app.post('/upload-image', upload.single('patientImage'), async (req, res) => {
     } catch (err) {
         console.error(err);
         res.status(500).send("Upload failed");
+    }
+});
+
+function analyzeReport(text) {
+    const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
+    const results = [];
+
+    const unitPattern = /(mg\/dL|ng\/mL|µ?IU\/mL|g\/dL|mmol\/L|mEq\/L|IU\/L)/i;
+
+    for (let line of lines) {
+
+        const unitMatch = line.match(unitPattern);
+        if (!unitMatch) continue;
+
+        const unit = unitMatch[0];
+        const unitIndex = line.indexOf(unit);
+
+        // Look only at text BEFORE unit
+        const beforeUnit = line.substring(0, unitIndex);
+
+        // Extract LAST number before unit
+        const numbers = beforeUnit.match(/\b\d+\.?\d*\b/g);
+        if (!numbers) continue;
+
+        const value = parseFloat(numbers[numbers.length - 1]);
+
+        // Everything before that number = test name
+        const valueIndex = beforeUnit.lastIndexOf(numbers[numbers.length - 1]);
+        const testName = beforeUnit.substring(0, valueIndex).trim();
+
+        // Skip weird header lines
+        if (testName.length < 2) continue;
+
+        results.push({
+            testName,
+            value,
+            unit
+        });
+    }
+
+    return results;
+}
+
+app.post('/upload-report', upload.single('file'), async (req, res) => {
+    try {
+        const { patientId } = req.body;
+        const file = req.file;
+
+        if (!file) return res.status(400).json({ error: 'No file uploaded' });
+
+        let extractedText = "";
+
+        if (file.mimetype === "application/pdf") {
+            const dataBuffer = fs.readFileSync(file.path);
+            const pdfData = await pdf(dataBuffer);
+            extractedText = pdfData.text;
+        }
+
+        else if (file.mimetype.startsWith("image/")) {
+            const result = await Tesseract.recognize(file.path, 'eng');
+            extractedText = result.data.text;
+        }
+
+        else {
+            return res.status(400).json({ error: "Unsupported file type" });
+        }
+
+        // 🔥 CLEAN OCR TEXT HERE
+        extractedText = extractedText
+        .replace(/([a-zA-Z])(\d)/g, "$1 $2")
+        .replace(/ngimL/gi, "ng/mL")
+        .replace(/mgidL/gi, "mg/dL")
+        .replace(/D4n40mUmL/gi, "µIU/mL")
+        .replace(/[^\x00-\x7F]/g, "")   
+
+        console.log("Cleaned Extracted Text:", extractedText);
+
+        // 🔥 THEN analyze
+        const structuredData = analyzeReport(extractedText);
+        console.log("STRUCTURED DATA:", structuredData);
+
+        await pool.query(
+            `INSERT INTO diagnostic_files 
+            (patientid, filename, filelocationpath, extracted_text, dateuploaded)
+            VALUES ($1, $2, $3, $4, NOW())`,
+            [patientId, file.originalname, file.path, extractedText]
+        );
+
+        res.json({
+        success: true,
+        tests: structuredData
+        });
+
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: "Extraction failed" });
+    }
+});
+
+// Generate a QR code that points to the patient-facing upload page
+app.get('/generate-qr', async (req, res) => {
+    const patientId = req.query.patientId || 'UNKNOWN';
+
+    const baseUrl = process.env.BASE_URL;
+    const link = `${baseUrl}/qr-upload/${encodeURIComponent(patientId)}`;
+    try {
+        const dataUrl = await QRCode.toDataURL(link);
+        res.json({ dataUrl, link });
+    } catch (err) {
+        console.error('QR generation error:', err.message);
+        res.status(500).json({ error: 'QR generation failed' });
+    }
+});
+
+// Patient-facing upload page (scanned via QR)
+app.get('/qr-upload/:patientId', (req, res) => {
+    const patientId = req.params.patientId;
+    res.render('qr_upload', { patientId });
+});
+
+app.post('/qr-upload/:patientId', upload.single('report'), async (req, res) => {
+    const patientId = req.params.patientId;
+    const file = req.file;
+    if (!file) return res.status(400).send('No file uploaded');
+
+    try {
+        const filename = file.originalname;
+        const filepath = file.path;
+        const filetype = file.mimetype;
+
+        await pool.query(
+            `INSERT INTO diagnostic_files (patientid, filename, filepath, filetype, uploaded_at) VALUES ($1,$2,$3,$4,NOW())`,
+            [patientId, filename, filepath, filetype]
+        );
+
+        res.send('<h3>Upload successful</h3><p>Thank you — the report was uploaded.</p>');
+    } catch (err) {
+        console.error('qr-upload error:', err.message);
+        res.status(500).send('Server error during upload');
     }
 });
 

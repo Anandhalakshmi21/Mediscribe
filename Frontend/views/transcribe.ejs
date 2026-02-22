@@ -77,8 +77,8 @@
         </div>
 
         <div class="utility-controls">
-            <div class="dropdown" onclick="toggleUploadDropdown()">
-                <button class="upload-btn">
+            <div class="dropdown">
+                <button class="upload-btn" onclick="toggleUploadDropdown()">
                     <span class="material-icons">cloud_upload</span> Upload Options
                 </button>
 
@@ -92,8 +92,8 @@
                 </div>
             </div>
             
-            <button class="btn edit-btn" onclick="openEditModal()">
-                <span class="material-icons">edit</span> Edit Notes
+            <button class="btn edit-btn" id="editToggleBtn" onclick="toggleInlineEdit()" disabled>
+                <span class="material-icons">edit</span> Edit Inline
             </button>
             
             <button class="btn btn-primary save-btn" onclick="saveConsultationRecord('<%= currentPatientId %>')">
@@ -132,8 +132,29 @@
         </div>
     </div>
 
+    <!-- Upload From Device Modal -->
+    <div id="uploadDeviceModal" class="modal">
+        <div class="modal-content small-modal">
+            <span class="close-btn" onclick="closeModal('uploadDeviceModal')">&times;</span>
+            <h3>Upload Medical Report</h3>
+
+            <input type="file" id="medicalFileInput"
+                accept=".pdf,.png,.jpg,.jpeg" />
+
+            <button class="btn btn-primary" onclick="uploadMedicalReport()">
+                Upload & Analyze
+            </button>
+
+            <div id="reportSummaryOutput" style="margin-top:15px;"></div>
+        </div>
+    </div>
+
 
     <script src="/js/main.js"></script>
+    <script>
+        // expose current patient id to client scripts
+        window.currentPatientId = '<%= currentPatientId %>';
+    </script>
     <script src="/js/transcribe.js"></script>
 </body>
 </html>

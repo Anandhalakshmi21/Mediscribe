@@ -646,6 +646,8 @@ body.dark-mode .detail-row {
     padding-right: 0; /* Remove default padding to allow sidebar to touch edge */
     padding-top: 10px;
     padding-bottom: 120px; /* Space for fixed bottom controls */
+    transition: all 0.3s ease;
+    width: 100%;
 }
 
 .end-session-btn {
@@ -685,16 +687,20 @@ body.dark-mode .detail-row {
     position: fixed;
     right: 0;
     top: 60px; /* Below the header */
-    bottom: 0;
+    bottom: 80px;
     overflow-y: auto;
     transition: width 0.3s ease-in-out;
     padding: 0;
     z-index: 90;
+    visibility: hidden;
 }
 
-.prediction-sidebar.open {
-    width: 280px; /* Width when open */
+
+.prediction-sidebar.active, .prediction-sidebar.open {
+    width: 280px; /* Ensure width is set */
     padding: 20px 15px;
+    right: 0; /* Align to the edge or 20px if you want it floating */
+    visibility: visible;
 }
 
 .prediction-sidebar h3 {
@@ -732,6 +738,14 @@ body.dark-mode .detail-row {
     padding-left: 0;
     font-size: 0.9em;
     color: var(--color-text-dark);
+}
+
+.live-text.editable-mode {
+    border: 2px dashed #007bff;
+    padding: 10px;
+    background-color: #f0f8ff;
+    outline: none;
+    cursor: text;
 }
 
 /* Fixed Bottom Control Bar */
@@ -833,11 +847,11 @@ body.dark-mode .detail-row {
 .dropdown-content {
     display: none;
     position: absolute;
+    bottom: 100%;
     background-color: var(--color-white);
     min-width: 180px;
     box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
     z-index: 1;
-    bottom: 100%; /* Appears above the button */
     right: 0;
     border-radius: 6px;
     overflow: hidden;
@@ -857,6 +871,10 @@ body.dark-mode .detail-row {
 
 .dropdown-content a .material-icons {
     margin-right: 8px;
+}
+
+.dropdown-content.show {
+    display: block;
 }
 
 /* QR Code Modal Styling */
@@ -921,4 +939,12 @@ body.dark-mode .detail-row {
 
 .transcription-output p:last-child {
     margin-bottom: 0;
+}
+
+.editable-mode {
+    border: none;
+    background: #f4fff4;
+    padding: 10px;
+    border-radius: 8px;
+    outline: none;
 }

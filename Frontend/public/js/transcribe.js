@@ -2,6 +2,7 @@ let mediaRecorder;
 let audioChunks = [];
 let isRecording = false;
 let fullTranscript = "";
+let isEditMode = false;
 
 const startBtn = document.getElementById("startMic");
 const pauseBtn = document.getElementById("pauseMic");
@@ -93,13 +94,20 @@ async function startRecording() {
             await sendAudioChunk(blob);
         };
 
-        mediaRecorder.start();
-        isRecording = true;
-
         // UI updates
         startBtn.style.display = "none";
         pauseBtn.style.display = "inline-block";
         stopBtn.style.display = "inline-block";
+
+        // ✅ UI Updates: Sidebar (Slide in)
+        const sidebar = document.getElementById("predictionSidebar");
+        if (sidebar) {
+            sidebar.classList.add("open"); 
+            sidebar.classList.add("active"); // Keep active if you use it for other styles
+        }
+
+        mediaRecorder.start();
+        isRecording = true;
 
         outputDiv.innerHTML = `<p class="status-message active">Recording...</p>`;
 
@@ -121,20 +129,14 @@ async function startRecording() {
 // PAUSE RECORDING
 // ----------------------------
 function pauseRecording() {
-    if (mediaRecorder && isRecording) {
-        mediaRecorder.pause();
-        
-        // UI update
-        pauseBtn.textContent = "Resume";
-        
-        outputDiv.innerHTML += `<p class="status-message paused">Paused...</p>`;
+    if (!mediaRecorder) return;
 
-        // Call backend LLM to fix/clean the live transcript for an ortho doctor
-        try {
-            // callFixTranscript();
-        } catch (e) {
-            console.error('Error calling fix transcript on pause:', e);
-        }
+    if (mediaRecorder.state === "recording") {
+        mediaRecorder.pause();
+        pauseBtn.innerHTML = `<span class="material-icons">play_arrow</span>`;
+    } else if (mediaRecorder.state === "paused") {
+        mediaRecorder.resume();
+        pauseBtn.innerHTML = `<span class="material-icons">pause</span>`;
     }
 }
 
@@ -166,6 +168,28 @@ function stopRecording() {
         startBtn.style.display = "inline-block";
         pauseBtn.style.display = "none";
         stopBtn.style.display = "none";
+
+         // ✅ Enable Edit button after session ends
+        const editBtn = document.getElementById("editToggleBtn");
+        editBtn.disabled = false;
+
+        // ✅ Automatically prepare transcript for editing
+        let liveDiv = document.querySelector(".live-text");
+
+        if (!liveDiv) {
+            outputDiv.innerHTML = `<div class="live-text">${fullTranscript}</div>`;
+            liveDiv = document.querySelector(".live-text");
+        }
+
+        liveDiv.contentEditable = "true";
+        liveDiv.classList.add("editable-mode");
+        liveDiv.focus();
+
+        editBtn.innerHTML = `
+            <span class="material-icons">check_circle</span> Save Changes
+        `;
+
+        isEditMode = true;
     }
 }
 
@@ -306,5 +330,103 @@ async function callFixTranscript() {
     } finally {
         const s = outputDiv.querySelector('.status-message.active');
         if (s) s.remove();
+    }
+}
+
+function openUploadFromDeviceModal() {
+    document.getElementById("uploadDeviceModal").style.display = "block";
+}
+
+async function openQrModal() {
+    const patientId = window.currentPatientId || 'UNKNOWN';
+    document.getElementById('qrCodeModal').style.display = 'block';
+    const display = document.getElementById('qrCodeDisplay');
+    display.innerHTML = '<p>Generating QR...</p>';
+
+    try {
+        const resp = await fetch(`/generate-qr?patientId=${encodeURIComponent(patientId)}`);
+        if (!resp.ok) throw new Error('QR generation failed');
+        const j = await resp.json();
+        display.innerHTML = `\n            <img src="${j.dataUrl}" alt="QR Code" class="qr-code-img">\n            <p class="qr-link">Unique Link: <code>${j.link}</code></p>\n        `;
+    } catch (err) {
+        console.error('openQrModal error:', err);
+        display.innerHTML = '<p>Error generating QR code.</p>';
+    }
+}
+
+async function uploadMedicalReport() {
+
+    const fileInput = document.getElementById("medicalFileInput");
+    const file = fileInput.files[0];
+
+    if (!file) {
+        alert("Please select a file.");
+        return;
+    }
+
+    const patientId = window.currentPatientId || 'UNKNOWN';
+
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("patientId", patientId);
+
+    const summaryContainer = document.getElementById("reportSummaryOutput");
+    summaryContainer.innerHTML = "<p>Analyzing report... Please wait.</p>";
+
+    try {
+        const response = await fetch("/upload-report", {
+            method: "POST",
+            body: formData
+        });
+
+        const data = await response.json();
+
+        summaryContainer.innerHTML = "";
+
+        if (data.tests && data.tests.length > 0) {
+            data.tests.forEach(test => {
+                const row = document.createElement("p");
+                row.innerHTML = `<strong>${test.testName}:</strong> ${test.value} ${test.unit}`;
+                summaryContainer.appendChild(row);
+            });
+        } else {
+            summaryContainer.innerHTML = "No tests detected.";
+        }
+
+    } catch (error) {
+        summaryContainer.innerHTML = "<p>Error analyzing report.</p>";
+    }
+}
+
+
+function toggleInlineEdit() {
+    const editBtn = document.getElementById("editToggleBtn");
+    const liveDiv = document.querySelector(".live-text");
+
+    if (!liveDiv) return;
+
+    if (isEditMode) {
+        // Save changes
+        fullTranscript = liveDiv.innerText;
+        liveDiv.contentEditable = "false";
+        liveDiv.classList.remove("editable-mode");
+
+        editBtn.innerHTML = `
+            <span class="material-icons">edit</span> Edit Notes
+        `;
+
+        isEditMode = false;
+
+    } else {
+        // Re-open editing if needed
+        liveDiv.contentEditable = "true";
+        liveDiv.classList.add("editable-mode");
+        liveDiv.focus();
+
+        editBtn.innerHTML = `
+            <span class="material-icons">check_circle</span> Save Changes
+        `;
+
+        isEditMode = true;
     }
 }

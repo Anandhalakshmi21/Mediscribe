@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload Report</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="page-container">
+    <main class="content-area">
+        <section style="max-width:600px;margin:40px auto;">
+            <h2>Upload Report for Patient: <%= patientId %></h2>
+            <form action="/qr-upload/<%= patientId %>" method="post" enctype="multipart/form-data">
+                <input type="file" name="report" accept=".pdf,.png,.jpg,.jpeg" required />
+                <div style="margin-top:12px;">
+                    <button class="btn btn-primary" type="submit">Upload</button>
+                </div>
+            </form>
+            <p style="margin-top:16px;">After successful upload, the clinic will be notified.</p>
+        </section>
+    </main>
+</body>
+</html>
