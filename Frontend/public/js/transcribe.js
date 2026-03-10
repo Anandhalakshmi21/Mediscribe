@@ -261,6 +261,68 @@ async function sendAudioChunk(blob) {
     }
 }
 
+function updatePredictionSidebar(data) {
+
+    console.log("Prediction data:", data);
+    
+    const diseaseList = document.getElementById("diseasePrediction");
+    const medicationList = document.getElementById("medicationSuggestion");
+    const testList = document.getElementById("testSuggestion");
+
+    diseaseList.innerHTML = "";
+    medicationList.innerHTML = "";
+    testList.innerHTML = "";
+
+    const prediction = data.prediction;
+
+    // Diseases
+    prediction.possible_diseases.forEach(d => {
+        const li = document.createElement("li");
+        li.innerHTML = `
+            <strong>${d.disease}</strong> 
+            <span style="color:gray">(${d.confidence})</span>
+        `;
+        diseaseList.appendChild(li);
+    });
+
+    // Medications
+    prediction.suggested_medications.forEach(m => {
+        const li = document.createElement("li");
+        li.textContent = m;
+        medicationList.appendChild(li);
+    });
+
+    // Tests
+    prediction.recommended_tests.forEach(t => {
+        const li = document.createElement("li");
+        li.textContent = t;
+        testList.appendChild(li);
+    });
+
+    // Update status message
+    document.querySelector(".status-message").textContent =
+        "AI analysis completed.";
+}
+
+async function analyzeTranscript() {
+
+    const transcript = document.querySelector(".live-text").innerText;
+
+    const response = await fetch("/analyze-transcript", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ transcript })
+    });
+
+    const data = await response.json();
+
+    console.log("Prediction received:", data);
+
+    updatePredictionSidebar(data);
+
+}
 
 /**
  * Calls backend LLM (Gemini proxy) to fix and format the current live transcript
@@ -406,16 +468,21 @@ function toggleInlineEdit() {
     if (!liveDiv) return;
 
     if (isEditMode) {
-        // Save changes
-        fullTranscript = liveDiv.innerText;
-        liveDiv.contentEditable = "false";
-        liveDiv.classList.remove("editable-mode");
 
-        editBtn.innerHTML = `
-            <span class="material-icons">edit</span> Edit Notes
-        `;
+    // Save edited transcript
+    fullTranscript = liveDiv.innerText;
 
-        isEditMode = false;
+    liveDiv.contentEditable = "false";
+    liveDiv.classList.remove("editable-mode");
+
+    editBtn.innerHTML = `
+        <span class="material-icons">edit</span> Edit Notes
+    `;
+
+    isEditMode = false;
+
+    // ✅ SEND EDITED TRANSCRIPT TO AI
+    analyzeTranscript();
 
     } else {
         // Re-open editing if needed

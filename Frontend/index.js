@@ -251,6 +251,37 @@ app.get('/home/:role', async (req, res) => {
     }
 });
 
+app.post("/analyze-transcript", async (req, res) => {
+
+  try {
+
+    const transcript = req.body.transcript;
+
+    console.log("Transcript received:", transcript);
+
+    const response = await fetch(`${baseUrl}/analyze`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ transcript })
+    });
+
+    const data = await response.json();
+
+    console.log("Colab returned:", JSON.stringify(data, null, 2));
+
+    res.json(data);
+
+  } catch (error) {
+
+    console.error("Analyze error:", error);
+
+    res.status(500).json({ error: "Analysis failed" });
+  }
+
+});
+
 app.get('/appointment', async (req, res) => {
     const currentUserId = req.session.userId;
     if (!currentUserId) return res.redirect('/login');
