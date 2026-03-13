@@ -10,10 +10,9 @@ const stopBtn = document.getElementById("stopMic");
 const outputDiv = document.getElementById("transcriptionOutput");
 
 // 🔴 Replace with your ngrok URL
-const API_URL = "https://helene-overdogmatic-seth.ngrok-free.dev/transcribe";
+const API_URL = `${baseUrl}/transcribe`;
 // ⚠️ WARNING: The Gemini API key will be exposed in client-side code.
 // Only use this for testing. Replace with your key or add a backend proxy for production.
-const GEMINI_API_KEY = "AIzaSyDstac80iUPuDwuN9nTzb8Ow95I9Pbu7pg";
 
 // ----------------------------
 // START RECORDING
@@ -354,7 +353,7 @@ async function callFixTranscript() {
             headers: {
                 'Content-Type': 'application/json',
                 // quickstart uses x-goog-api-key header
-                'x-goog-api-key': GEMINI_API_KEY
+                'x-goog-api-key': `${GEMINI_API_KEY}`
             },
             body: JSON.stringify({
                 contents: [

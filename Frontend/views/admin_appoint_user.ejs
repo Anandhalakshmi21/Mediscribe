@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Appoint User</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+</head>
+<body class="auth-page">
+    <div class="login-container">
+        <header class="logo-header">
+            <span class="app-logo">âš•ï¸</span>
+            <h1>Admin</h1>
+        </header>
+
+        <form class="auth-form" method="POST" action="/admin/appoint-user">
+            <h2>Appoint User</h2>
+
+            <% if (error) { %>
+                <p style="color:#b00020; text-align:center;"><%= error %></p>
+            <% } %>
+            <% if (success) { %>
+                <p style="color:#0b6b2f; text-align:center;"><%= success %></p>
+            <% } %>
+
+            <div class="input-group">
+                <span class="material-icons">badge</span>
+                <input type="text" name="fullName" placeholder="Full Name" required>
+            </div>
+
+            <div class="input-group">
+                <span class="material-icons">email</span>
+                <input type="email" name="email" placeholder="Email" required>
+            </div>
+
+            <div class="input-group">
+                <span class="material-icons">phone</span>
+                <input type="tel" name="phoneNumber" placeholder="Phone Number" required>
+            </div>
+
+            <div class="input-group">
+                <span class="material-icons">lock</span>
+                <input type="password" name="password" placeholder="Password" required>
+            </div>
+
+            <div class="input-group">
+                <span class="material-icons">person</span>
+                <select id="roleSelect" name="role" required onchange="toggleDoctorFields(this.value)">
+                    <option value="" disabled selected>Select Role</option>
+                    <option value="doctor">Doctor</option>
+                    <option value="assistant">Assistant</option>
+                </select>
+            </div>
+
+            <div id="doctorFields" style="display:none;">
+                <div class="input-group">
+                    <span class="material-icons">verified</span>
+                    <input type="text" id="licenseNumber" name="licenseNumber" placeholder="Medical License #">
+                </div>
+
+                <div class="input-group">
+                    <span class="material-icons">local_hospital</span>
+                    <input type="text" id="specialization" name="specialization" placeholder="Specialization">
+                </div>
+            </div>
+
+            <button type="submit" class="btn btn-primary">Create User</button>
+
+            <p class="switch-link">
+                <a href="/admin">Back to Admin</a>
+            </p>
+        </form>
+    </div>
+
+    <script>
+        function toggleDoctorFields(role) {
+            var isDoctor = String(role || '').toLowerCase() === 'doctor';
+            var doctorFields = document.getElementById('doctorFields');
+            var license = document.getElementById('licenseNumber');
+            var spec = document.getElementById('specialization');
+
+            doctorFields.style.display = isDoctor ? 'block' : 'none';
+            license.required = isDoctor;
+            spec.required = isDoctor;
+        }
+    </script>
+</body>
+</html>

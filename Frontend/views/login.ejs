@@ -18,6 +18,10 @@
         <form id="loginForm" class="auth-form" action="/login" method="POST">
             <h2>Login</h2>
 
+            <% if (typeof error !== 'undefined' && error) { %>
+                <p style="color:#b00020; text-align:center; margin: 0 0 12px 0;"><%= error %></p>
+            <% } %>
+
             <div class="input-group">
                 <span class="material-icons">email</span>
                 <input type="email" id="loginEmail" name="loginEmail" placeholder="Email / Phone Number" required>
@@ -34,13 +38,14 @@
                     <option value="" disabled selected>Select Role</option>
                     <option value="doctor">Doctor</option>
                     <option value="assistant">Assistant</option>
+                    <option value="admin">Admin</option>
                 </select>
             </div>
 
             <button type="submit" class="btn btn-primary">Log In</button>
             
             <p class="switch-link">
-                Don't have an account? <a href="/signup">Sign Up</a>
+                Need access? <a href="/contact-administrator">Contact Administrator</a>
             </p>
         </form>
     </div>

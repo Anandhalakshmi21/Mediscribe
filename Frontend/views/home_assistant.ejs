@@ -82,7 +82,7 @@
                     <option value="" disabled selected>Select Doctor</option>
                     <% if (typeof doctors !== 'undefined' && doctors.length > 0) { %>
                         <% doctors.forEach(doc => { %>
-                            <option value="<%= doc.clinicianid %>">Dr. <%= doc.firstname %> <%= doc.lastname %></option>
+                            <option value="<%= doc.doctor_id %>">Dr. <%= doc.firstname %> <%= doc.lastname %></option>
                         <% }); %>
                     <% } %>
                 </select>

@@ -16,6 +16,9 @@ const pdf = require("pdf-parse");
 
 dotenv.config();
 
+// Used by /analyze-transcript and QR code generation.
+const baseUrl = process.env.BASE_URL;
+
 const { Pool } = pkg;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -41,6 +44,103 @@ pool.connect()
         process.exit(1); 
     });
 
+// Detect whether the DB is using the legacy Clinicians table or the new single Users table.
+// This lets the app work with either schema while you transition.
+const dbModePromise = (async () => {
+    const mode = {
+        hasCliniciansTable: false,
+        // Legacy: clinicianid (points to clinicians.clinicianid)
+        // New ERD: userid / doctor_userid (points to users.userid)
+        appointmentsDoctorColumn: "clinicianid",
+        // Columns on users that hold doctor metadata (varies by migration).
+        userDoctorColumns: [],
+    };
+
+    try {
+        await pool.query("SELECT 1 FROM clinicians LIMIT 1");
+        mode.hasCliniciansTable = true;
+    } catch {
+        mode.hasCliniciansTable = false;
+    }
+
+    try {
+        const colRes = await pool.query(
+            `
+            SELECT LOWER(column_name) AS column_name
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'appointments'
+              AND LOWER(column_name) IN ('userid', 'doctor_userid', 'clinicianid')
+            `
+        );
+        const cols = new Set(colRes.rows.map(r => r.column_name));
+        if (cols.has("doctor_userid")) mode.appointmentsDoctorColumn = "doctor_userid";
+        else if (cols.has("userid")) mode.appointmentsDoctorColumn = "userid";
+        else if (cols.has("clinicianid")) mode.appointmentsDoctorColumn = "clinicianid";
+    } catch {
+        // If we can't introspect, keep safe legacy default.
+    }
+
+    try {
+        const userColRes = await pool.query(
+            `
+            SELECT LOWER(column_name) AS column_name
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'users'
+              AND LOWER(column_name) IN ('licensenumber', 'specialty', 'specialization', 'license_number')
+            `
+        );
+        mode.userDoctorColumns = userColRes.rows
+            .map(r => r.column_name)
+            .filter(c => typeof c === "string" && /^[a-z_]+$/.test(c));
+    } catch {
+        mode.userDoctorColumns = [];
+    }
+
+    return mode;
+})();
+
+async function getDbMode() {
+    return dbModePromise;
+}
+
+async function getSessionUser(req) {
+    const currentUserId = req.session?.userId;
+    if (!currentUserId) return null;
+
+    const mode = await getDbMode();
+    const baseCols = ["userid", "userrole", "firstname", "lastname", "email", "phonenumber"];
+    const extraCols = Array.isArray(mode.userDoctorColumns) ? mode.userDoctorColumns : [];
+    const selectCols = [...baseCols, ...extraCols];
+    const selectList = selectCols.map(c => `"${c}"`).join(", ");
+
+    const userRes = await pool.query(`SELECT ${selectList} FROM users WHERE userid = $1`, [currentUserId]);
+    return userRes.rows[0] || null;
+}
+
+function requireLogin(req, res, next) {
+    if (!req.session?.userId) return res.redirect("/login");
+    return next();
+}
+
+function requireRole(requiredRole) {
+    const required = requiredRole.toLowerCase();
+    return async (req, res, next) => {
+        try {
+            const user = await getSessionUser(req);
+            if (!user) return res.redirect("/login");
+            const actualRole = String(user.userrole || "").toLowerCase();
+            if (actualRole !== required) return res.status(403).send("Forbidden");
+            req.currentUser = user;
+            return next();
+        } catch (err) {
+            console.error("Auth error:", err.message);
+            return res.status(500).send("Internal Server Error");
+        }
+    };
+}
+
 app.use(session({
     secret: 'secretsecret1234secret1234',
     resave: false,
@@ -57,7 +157,7 @@ app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
 app.get('/login', (req, res) => {
- res.render('login');
+ res.render('login', { error: req.query?.error });
 });
 
 
@@ -82,10 +182,14 @@ app.post('/login', async (req, res) => {
         }
 
         req.session.userId = user.userid;
-        const userRole = user.userrole.toLowerCase();
+        const userRole = String(user.userrole || "").toLowerCase();
+        req.session.userRole = userRole;
         
         console.log(`Login successful for ${loginEmail}. Role: ${userRole}.`);
-        
+
+        if (userRole === "admin") {
+            return res.redirect("/admin");
+        }
         return res.redirect(`/home/${userRole}`);
 
     } catch (error) {
@@ -97,64 +201,179 @@ app.post('/login', async (req, res) => {
 
 
 app.get('/signup', (req, res) => {
-     res.render('signup');
+    // Legacy route: self-signup is disabled per PRD.
+    res.redirect('/contact-administrator');
 });
 
 app.post('/signup', async (req, res) => {
-    const { firstName, lastName, specialty, licenseNumber, signupEmail, signupPhone, signupPassword, signupRole } = req.body; 
-    const passwordHash = signupPassword; 
-    let client;
-    try {
-        client = await pool.connect();
-        await client.query('BEGIN');
+    // Legacy route: self-signup is disabled per PRD.
+    res.redirect('/contact-administrator');
+});
 
-        const userRes = await client.query(
-             'INSERT INTO "users" ("firstname", "lastname", "email", "passwordhash", "userrole", "phonenumber") VALUES ($1, $2, $3, $4, $5, $6) RETURNING "userid"',
-            [firstName, lastName, signupEmail, passwordHash, signupRole, signupPhone]
-        );
-        const newUserId = userRes.rows[0].userid;
+app.get('/contact-administrator', (req, res) => {
+    res.render('contact_admin');
+});
 
-        if (signupRole.toLowerCase() === 'doctor') {
-            if (!specialty || !licenseNumber) {
-                throw new Error("Doctor sign-up requires specialty and license number.");
-            }
-            await client.query(
-                'INSERT INTO "clinicians" ("userid", "specialty", "licensenumber") VALUES ($1, $2, $3)',
-                [newUserId, specialty, licenseNumber]
-            );
+app.get('/admin', requireLogin, requireRole("admin"), (req, res) => {
+    res.render('home_admin', { userRole: "admin", currentPage: "admin" });
+});
+
+app.get('/admin/appoint-user', requireLogin, requireRole("admin"), (req, res) => {
+    res.render('admin_appoint_user', { userRole: "admin", currentPage: "admin", error: null, success: null });
+});
+
+app.post('/admin/appoint-user', requireLogin, requireRole("admin"), async (req, res) => {
+    const {
+        fullName,
+        email,
+        phoneNumber,
+        password,
+        role,
+        licenseNumber,
+        specialization,
+        specialty, // allow either name
+    } = req.body;
+
+    const normalizedRole = String(role || "").toLowerCase();
+    if (!fullName || !email || !phoneNumber || !password || !normalizedRole) {
+        return res.status(400).render('admin_appoint_user', {
+            userRole: "admin",
+            currentPage: "admin",
+            error: "Please fill all required fields.",
+            success: null
+        });
+    }
+
+    if (!["doctor", "assistant"].includes(normalizedRole)) {
+        return res.status(400).render('admin_appoint_user', {
+            userRole: "admin",
+            currentPage: "admin",
+            error: "Role must be Doctor or Assistant.",
+            success: null
+        });
+    }
+
+    const docSpecialization = specialization || specialty || null;
+    const docLicense = licenseNumber || null;
+    if (normalizedRole === "doctor") {
+        if (!docLicense || !docSpecialization) {
+            return res.status(400).render('admin_appoint_user', {
+                userRole: "admin",
+                currentPage: "admin",
+                error: "Doctor users require both Medical License # and Specialization.",
+                success: null
+            });
         }
-        await client.query('COMMIT');
-        console.log(`User ${firstName} ${lastName} created successfully (userid: ${newUserId}).`);
-        res.redirect('/login?signup=success');
+    }
 
-    } catch (error) {
-        console.error('Signup error:', error.message);
-        if (client) await client.query('ROLLBACK'); 
-        const errorMessage = error.message.includes('unique constraint') ? 'Email already exists.' : 'Server error during signup.';
-        res.redirect(`/signup?error=${encodeURIComponent(errorMessage)}`);
-    } finally {
-        if (client) client.release();
+    const nameParts = String(fullName).trim().split(/\s+/);
+    const firstName = nameParts[0] || "";
+    const lastName = nameParts.slice(1).join(" ") || "";
+
+    try {
+        const mode = await getDbMode();
+        let newUserId;
+
+        const client = await pool.connect();
+        try {
+            await client.query("BEGIN");
+
+            if (Array.isArray(mode.userDoctorColumns) && mode.userDoctorColumns.length > 0) {
+                const baseCols = ["firstname", "lastname", "email", "passwordhash", "userrole", "phonenumber"];
+                const cols = [...baseCols, ...mode.userDoctorColumns];
+
+                const values = [
+                    firstName,
+                    lastName,
+                    email,
+                    password,
+                    normalizedRole,
+                    phoneNumber,
+                ];
+
+                for (const col of mode.userDoctorColumns) {
+                    if (col === "specialty" || col === "specialization") {
+                        values.push(normalizedRole === "doctor" ? docSpecialization : null);
+                    } else if (col === "licensenumber" || col === "license_number") {
+                        values.push(normalizedRole === "doctor" ? docLicense : null);
+                    } else {
+                        // Unknown doctor metadata column: keep it NULL.
+                        values.push(null);
+                    }
+                }
+
+                const colList = cols.map(c => `"${c}"`).join(", ");
+                const placeholders = cols.map((_, i) => `$${i + 1}`).join(", ");
+                const insertUserQuery = `INSERT INTO users (${colList}) VALUES (${placeholders}) RETURNING userid`;
+
+                const userRes = await client.query(insertUserQuery, values);
+                newUserId = userRes.rows[0]?.userid;
+            } else {
+                const userRes = await client.query(
+                    "INSERT INTO users (firstname, lastname, email, passwordhash, userrole, phonenumber) VALUES ($1,$2,$3,$4,$5,$6) RETURNING userid",
+                    [firstName, lastName, email, password, normalizedRole, phoneNumber]
+                );
+                newUserId = userRes.rows[0]?.userid;
+
+                if (normalizedRole === "doctor" && mode.hasCliniciansTable) {
+                    await client.query(
+                        "INSERT INTO clinicians (userid, specialty, licensenumber) VALUES ($1,$2,$3)",
+                        [newUserId, docSpecialization, docLicense]
+                    );
+                }
+            }
+
+            await client.query("COMMIT");
+        } catch (err) {
+            await client.query("ROLLBACK");
+            throw err;
+        } finally {
+            client.release();
+        }
+
+        return res.render('admin_appoint_user', {
+            userRole: "admin",
+            currentPage: "admin",
+            error: null,
+            success: `User created successfully (User_ID: ${newUserId}).`
+        });
+    } catch (err) {
+        console.error("Appoint user error:", err.message);
+        return res.status(500).render('admin_appoint_user', {
+            userRole: "admin",
+            currentPage: "admin",
+            error: "Server error while creating the user. (If the email already exists, choose a different email.)",
+            success: null
+        });
     }
 });
 
 
 
 app.get('/home/:role', async (req, res) => {
-    const role = req.params.role;
     const currentUserId = req.session.userId;
     
-    // 1. Only block if the user is NOT logged in at all
     if (!currentUserId) {
         return res.redirect('/login');
     }
 
-    let doctorName = 'User';
-    let nextAppointment = null;
-    let appointmentStats = { today: 0, pending: 0 }; 
-
     try {
-        if (role === 'assistant') {
-            
+        const userRes = await pool.query(
+            "SELECT userid, userrole, firstname, lastname FROM users WHERE userid = $1",
+            [currentUserId]
+        );
+        if (userRes.rows.length === 0) return res.redirect("/login");
+
+        const actualRole = String(userRes.rows[0].userrole || "").toLowerCase();
+
+        // Prevent role spoofing via URL.
+        if (req.params.role && req.params.role.toLowerCase() !== actualRole) {
+            return res.redirect(actualRole === "admin" ? "/admin" : `/home/${actualRole}`);
+        }
+
+        const mode = await getDbMode();
+
+        if (actualRole === 'assistant') {
             const queueQuery = `
                 SELECT p.firstname || ' ' || p.lastname as patient_name, p.patientid as patient_id, 
                 TO_CHAR(a."appointmentdatetime", 'HH12:MI AM') as appointment_time
@@ -163,11 +382,21 @@ app.get('/home/:role', async (req, res) => {
                 WHERE a."appointmentdatetime"::date = CURRENT_DATE
                 ORDER BY a."appointmentdatetime" ASC`;
             
-            const doctorsQuery = `
-                SELECT u.firstname, u.lastname, c.clinicianid 
-                FROM users u 
-                JOIN clinicians c ON u.userid = c.userid 
-                WHERE u.userrole = 'doctor'`;
+            // Doctor list for appointment creation:
+            // Legacy schema uses clinicians.clinicianid, new schema uses users.userid.
+            const doctorsQuery =
+                mode.hasCliniciansTable && mode.appointmentsDoctorColumn === "clinicianid"
+                    ? `
+                        SELECT u.firstname, u.lastname, c.clinicianid AS doctor_id
+                        FROM users u
+                        JOIN clinicians c ON u.userid = c.userid
+                        WHERE LOWER(u.userrole) = 'doctor'
+                      `
+                    : `
+                        SELECT firstname, lastname, userid AS doctor_id
+                        FROM users
+                        WHERE LOWER(userrole) = 'doctor'
+                      `;
 
             const doctorsResult = await pool.query(doctorsQuery);
             const queue = await pool.query(queueQuery);
@@ -179,81 +408,85 @@ app.get('/home/:role', async (req, res) => {
                 doctors: doctorsResult.rows 
             });
 
-        } else if (role === 'doctor') {
-            
-            const doctorDataQuery = `
-                SELECT u.firstname, u.lastname, c.clinicianid
-                FROM users u
-                JOIN clinicians c ON u.userid = c.userid
-                WHERE u.userid = $1;
-            `;
-            const doctorResult = await pool.query(doctorDataQuery, [currentUserId]);
-            const doctor = doctorResult.rows[0];
+        } else if (actualRole === 'doctor') {
+            const doctor = userRes.rows[0];
+            const doctorName = `${doctor.firstname} ${doctor.lastname}`;
 
-            if (doctor) {
-                doctorName = `${doctor.firstname} ${doctor.lastname}`; 
-                const clinicianId = doctor.clinicianid;
-
-                const todayCountQuery = `
-                    SELECT COUNT(*) as total 
-                    FROM appointments 
-                    WHERE clinicianid = $1 
-                    AND appointmentdatetime::date = CURRENT_DATE;
-                `;
-
-                const pendingCountQuery = `
-                    SELECT COUNT(*) as total 
-                    FROM appointments 
-                    WHERE clinicianid = $1 
-                    AND status != 'Completed'
-                    AND appointmentdatetime::date = CURRENT_DATE;
-                `;
-
-                const [todayRes, pendingRes] = await Promise.all([
-                    pool.query(todayCountQuery, [clinicianId]),
-                    pool.query(pendingCountQuery, [clinicianId])
-                ]);
-
-                appointmentStats = {
-                    today: todayRes.rows[0].total,
-                    pending: pendingRes.rows[0].total
-                };
-
-                const appointmentQuery = `
-                    SELECT 
-                        a."appointmentid",
-                        p.patientid,
-                        p.firstname,
-                        p.lastname,
-                        TO_CHAR(a."appointmentdatetime", 'HH12:MI AM') AS "Time"
-                    FROM appointments a
-                    JOIN patients p ON a."patientid" = p.patientid
-                    WHERE a."clinicianid" = $1 AND a."status" = 'Scheduled'
-                    ORDER BY a."appointmentdatetime" ASC
-                    LIMIT 1;
-                `;
-                const appointmentResult = await pool.query(appointmentQuery, [clinicianId]);
-                nextAppointment = appointmentResult.rows[0];
+            let doctorFkValue = currentUserId;
+            if (mode.appointmentsDoctorColumn === "clinicianid") {
+                const clinicianRes = await pool.query("SELECT clinicianid FROM clinicians WHERE userid = $1", [currentUserId]);
+                if (clinicianRes.rows.length === 0) {
+                    return res.status(403).send("This doctor is not registered in the clinicians table.");
+                }
+                doctorFkValue = clinicianRes.rows[0].clinicianid;
             }
+
+            const todayCountQuery = `
+                SELECT COUNT(*) as total 
+                FROM appointments 
+                WHERE "${mode.appointmentsDoctorColumn}" = $1 
+                AND appointmentdatetime::date = CURRENT_DATE;
+            `;
+
+            const pendingCountQuery = `
+                SELECT COUNT(*) as total 
+                FROM appointments 
+                WHERE "${mode.appointmentsDoctorColumn}" = $1 
+                AND status != 'Completed'
+                AND appointmentdatetime::date = CURRENT_DATE;
+            `;
+
+            const [todayRes, pendingRes] = await Promise.all([
+                pool.query(todayCountQuery, [doctorFkValue]),
+                pool.query(pendingCountQuery, [doctorFkValue])
+            ]);
+
+            const appointmentStats = {
+                today: todayRes.rows[0].total,
+                pending: pendingRes.rows[0].total
+            };
+
+            const appointmentQuery = `
+                SELECT 
+                    a."appointmentid",
+                    p.patientid,
+                    p.firstname,
+                    p.lastname,
+                    TO_CHAR(a."appointmentdatetime", 'HH12:MI AM') AS "Time"
+                FROM appointments a
+                JOIN patients p ON a."patientid" = p.patientid
+                WHERE a."${mode.appointmentsDoctorColumn}" = $1 AND a."status" = 'Scheduled'
+                ORDER BY a."appointmentdatetime" ASC
+                LIMIT 1;
+            `;
+            const appointmentResult = await pool.query(appointmentQuery, [doctorFkValue]);
+            const nextAppointment = appointmentResult.rows[0];
 
             return res.render('home_doctor', { 
                 userRole: 'doctor', 
                 currentPage: 'home', 
-                doctorName, 
-                nextAppointment, 
-                appointmentStats 
+                doctorName,
+                nextAppointment,
+                appointmentStats
             });
+        } else if (actualRole === "admin") {
+            return res.redirect("/admin");
         }
 
+        return res.status(403).send("Forbidden");
     } catch (error) {
         console.error('Error fetching home data:', error.message);
         res.status(500).send("Internal Server Error");
     }
 });
 
-app.post("/analyze-transcript", async (req, res) => {
+// Doctors only: assistants must be blocked from transcript-related endpoints (PRD).
+app.post("/analyze-transcript", requireLogin, requireRole("doctor"), async (req, res) => {
 
   try {
+    if (!baseUrl) {
+      return res.status(500).json({ error: "BASE_URL is not configured on the server." });
+    }
 
     const transcript = req.body.transcript;
 
@@ -282,9 +515,8 @@ app.post("/analyze-transcript", async (req, res) => {
 
 });
 
-app.get('/appointment', async (req, res) => {
+app.get('/appointment', requireLogin, requireRole("doctor"), async (req, res) => {
     const currentUserId = req.session.userId;
-    if (!currentUserId) return res.redirect('/login');
 
     const requestedDate = req.query.date;
     const dateForDisplay = requestedDate ? new Date(requestedDate) : new Date();
@@ -293,19 +525,31 @@ app.get('/appointment', async (req, res) => {
     });
 
     try {
-        const userRes = await pool.query('SELECT userrole FROM users WHERE userid = $1', [currentUserId]);
-        const actualRole = userRes.rows[0].userrole.toLowerCase();
+        const mode = await getDbMode();
+        let doctorFkValue = currentUserId;
+        if (mode.appointmentsDoctorColumn === "clinicianid") {
+            const clinicianRes = await pool.query("SELECT clinicianid FROM clinicians WHERE userid = $1", [currentUserId]);
+            if (clinicianRes.rows.length === 0) return res.status(403).send("This doctor is not registered in the clinicians table.");
+            doctorFkValue = clinicianRes.rows[0].clinicianid;
+        }
 
-        const dbDateFilter = requestedDate ? `'${requestedDate}'` : 'CURRENT_DATE';
+        const params = [doctorFkValue];
+        let dateClause = "a.appointmentdatetime::date = CURRENT_DATE";
+        if (requestedDate) {
+            params.push(requestedDate);
+            dateClause = "a.appointmentdatetime::date = $2::date";
+        }
+
         const appointmentsQuery = `
             SELECT a.appointmentid, p.patientid, p.firstname, p.lastname,
             TO_CHAR(a.appointmentdatetime, 'HH12:MI AM') AS "Time", a.status
             FROM appointments a
             JOIN patients p ON a.patientid = p.patientid
-            WHERE a.appointmentdatetime::date = ${dbDateFilter}
+            WHERE a."${mode.appointmentsDoctorColumn}" = $1
+              AND ${dateClause}
             ORDER BY a.appointmentdatetime ASC;`;
             
-        const result = await pool.query(appointmentsQuery);
+        const result = await pool.query(appointmentsQuery, params);
         const activeAppointments = result.rows.map(row => ({
             id: row.patientid, 
             name: `${row.firstname} ${row.lastname}`, 
@@ -315,7 +559,7 @@ app.get('/appointment', async (req, res) => {
 
         res.render('appointment', { 
             currentPage: 'appointment', 
-            userRole: actualRole, 
+            userRole: 'doctor', 
             displayDate: displayDate, 
             requestedDate: requestedDate,
             appointments: activeAppointments 
@@ -331,45 +575,41 @@ app.get('/appointment', async (req, res) => {
     }
 });
 
-app.get('/history', (req, res) => {
+app.get('/history', requireLogin, requireRole("doctor"), (req, res) => {
     res.render('history', { currentPage: 'history', userRole: 'doctor' });
 });
 
-app.get('/profile', async (req, res) => {
-    const currentUserId = req.session.userId;
-    if (!currentUserId) return res.redirect('/login');
-
+app.get('/profile', requireLogin, async (req, res) => {
     try {
-        // Fetch common user data
-        const userRes = await pool.query(
-            'SELECT firstname, lastname, email, userrole, phonenumber FROM users WHERE userid = $1',
-            [currentUserId]
-        );
-                
-        let userData = userRes.rows[0];
-        const userRole = userData.userrole.toLowerCase();
+        const currentUserId = req.session.userId;
+        const mode = await getDbMode();
 
-        // If Doctor, get extra details
-        if (userRole === 'doctor') {
-            const docRes = await pool.query(
-                'SELECT specialty, licensenumber FROM clinicians WHERE userid = $1',
-                [currentUserId]
-            );
+        let userData = await getSessionUser(req);
+        if (!userData) return res.redirect("/login");
+        const userRole = String(userData.userrole || "").toLowerCase();
+
+        // If doctor metadata is not stored on Users yet, fall back to legacy Clinicians table.
+        if (userRole === "doctor" && (!Array.isArray(mode.userDoctorColumns) || mode.userDoctorColumns.length === 0)) {
+            if (mode.hasCliniciansTable) {
+                const docRes = await pool.query("SELECT specialty, licensenumber FROM clinicians WHERE userid = $1", [currentUserId]);
+                if (docRes.rows[0]) {
+                    userData = { ...userData, ...docRes.rows[0] };
+                }
+            }
         }
 
-        res.render('profile', { 
-            userData: userData, 
-            userRole: userRole, 
-            currentPage: 'profile' 
+        res.render('profile', {
+            userData: userData,
+            userRole: userRole,
+            currentPage: 'profile'
         });
-
     } catch (err) {
         console.error(err);
         res.status(500).send("Server Error");
     }
 });
 
-app.get('/transcribe', (req, res) => {
+app.get('/transcribe', requireLogin, requireRole("doctor"), (req, res) => {
     const patientId = req.query.patientId || 'UNKNOWN';
     
     res.render('transcribe', { 
@@ -379,7 +619,7 @@ app.get('/transcribe', (req, res) => {
     });
 });
 
-app.post('/complete-appointment', async (req, res) => {
+app.post('/complete-appointment', requireLogin, requireRole("doctor"), async (req, res) => {
     const { patientId } = req.body;
 
     try {
@@ -402,13 +642,15 @@ app.post('/complete-appointment', async (req, res) => {
     }
 });
 
-app.post('/api/appointments', async (req, res) => {
+app.post('/api/appointments', requireLogin, requireRole("assistant"), async (req, res) => {
     // Debug: Check your terminal to see if data arrives
     console.log("Form submitted. Body:", req.body); 
 
     const { patName, patAge, patGender, patPhone, patAddress, apptDate, doctorId } = req.body;
 
     try {
+        const mode = await getDbMode();
+
         const nameParts = patName.trim().split(' ');
         const fName = nameParts[0];
         const lName = nameParts.slice(1).join(' ') || '';
@@ -422,9 +664,8 @@ app.post('/api/appointments', async (req, res) => {
         
         const newPatientId = patientRes.rows[0].patientid;
 
-        // Ensure these columns are also lowercase in your appointments table
         await pool.query(
-            `INSERT INTO appointments (patientid, clinicianid, appointmentdatetime, status) 
+            `INSERT INTO appointments (patientid, "${mode.appointmentsDoctorColumn}", appointmentdatetime, status) 
              VALUES ($1, $2, $3, 'Scheduled')`,
             [newPatientId, doctorId, apptDate]
         );
@@ -438,36 +679,29 @@ app.post('/api/appointments', async (req, res) => {
     }
 });
 
-app.post('/api/schedule-next', async (req, res) => {
+app.post('/api/schedule-next', requireLogin, requireRole("doctor"), async (req, res) => {
     const { patientId, nextDateTime } = req.body;
     const currentUserId = req.session.userId; // The ID from your users table
 
-    if (!currentUserId) {
-        return res.status(401).json({ success: false, message: "Session expired" });
-    }
-
     try {
-        // 1. Look up the Clinician ID that belongs to this User
-        // Note: Change 'userid' to whatever your link column is named in the clinicians table
-        const clinicianRes = await pool.query(
-            'SELECT clinicianid FROM clinicians WHERE userid = $1', 
-            [currentUserId]
-        );
+        const mode = await getDbMode();
 
-        if (clinicianRes.rows.length === 0) {
-            return res.status(403).json({ 
-                success: false, 
-                message: "This user is not registered in the clinicians table." 
-            });
+        let doctorFkValue = currentUserId;
+        if (mode.appointmentsDoctorColumn === "clinicianid") {
+            const clinicianRes = await pool.query("SELECT clinicianid FROM clinicians WHERE userid = $1", [currentUserId]);
+            if (clinicianRes.rows.length === 0) {
+                return res.status(403).json({
+                    success: false,
+                    message: "This user is not registered in the clinicians table."
+                });
+            }
+            doctorFkValue = clinicianRes.rows[0].clinicianid;
         }
 
-        const actualClinicianId = clinicianRes.rows[0].clinicianid;
-
-        // 2. Perform the insert using the REAL clinician ID
         await pool.query(
-            `INSERT INTO appointments (patientid, clinicianid, appointmentdatetime, status) 
+            `INSERT INTO appointments (patientid, "${mode.appointmentsDoctorColumn}", appointmentdatetime, status) 
              VALUES ($1, $2, $3, 'Scheduled')`,
-            [patientId, actualClinicianId, nextDateTime]
+            [patientId, doctorFkValue, nextDateTime]
         );
 
         res.json({ success: true });
@@ -477,7 +711,7 @@ app.post('/api/schedule-next', async (req, res) => {
     }
 });
 
-app.post('/upload-image', upload.single('patientImage'), async (req, res) => {
+app.post('/upload-image', requireLogin, requireRole("assistant"), upload.single('patientImage'), async (req, res) => {
     const { patientId } = req.body;
     const filePath = req.file.path;
     try {
@@ -631,6 +865,12 @@ app.post('/qr-upload/:patientId', upload.single('report'), async (req, res) => {
 
 app.get('/', (req, res) => {
      res.redirect('/login');
+});
+
+app.get('/logout', (req, res) => {
+    req.session.destroy(() => {
+        res.redirect('/login');
+    });
 });
 
 
