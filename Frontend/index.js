@@ -10,6 +10,13 @@ import QRCode from "qrcode";
 import fs from "fs";
 import Tesseract from "tesseract.js";
 import { createRequire } from "module";
+import Groq from "groq-sdk";
+
+const groq = new Groq({
+    apiKey: process.env.GROQ_API_KEY
+});
+
+
 const require = createRequire(import.meta.url);
 
 const pdf = require("pdf-parse");
@@ -43,6 +50,40 @@ pool.connect()
         console.error('❌ Database connection failed:', err.message);
         process.exit(1); 
     });
+
+// Lightweight schema bootstrapping for analytics/session tracking.
+// Keeps the app working even when the DB is missing newer columns/tables.
+async function ensureAnalyticsSchema() {
+    // Patients: created_at is needed for registration trends.
+    await pool.query(`
+        ALTER TABLE patients
+        ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    `);
+
+    // Consultation/transcription sessions. Kept FK-free to tolerate schema drift.
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS consultation_sessions (
+            sessionid BIGSERIAL PRIMARY KEY,
+            patientid BIGINT,
+            doctor_userid BIGINT,
+            appointmentid BIGINT,
+            status TEXT NOT NULL DEFAULT 'Recording',
+            started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            ended_at TIMESTAMPTZ,
+            transcript TEXT,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+    `);
+
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_consultation_sessions_created_at ON consultation_sessions (created_at)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_consultation_sessions_doctor_userid ON consultation_sessions (doctor_userid)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_consultation_sessions_status ON consultation_sessions (status)`);
+}
+
+ensureAnalyticsSchema()
+    .then(() => console.log("✅ Analytics schema ensured."))
+    .catch(err => console.error("❌ Failed to ensure analytics schema:", err.message));
 
 // Detect whether the DB is using the legacy Clinicians table or the new single Users table.
 // This lets the app work with either schema while you transition.
@@ -155,6 +196,246 @@ app.use(express.static(path.join(__dirname, "public")));
 
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
+
+const STATS_TTL_MS = 5 * 60 * 1000;
+let statsCache = { expiresAt: 0, value: null };
+
+async function computeStatsSnapshot() {
+    const [
+        totalPatientsRes,
+        totalSessionsRes,
+        activeSessionsRes,
+        completedSessionsRes,
+        sessionsTodayRes,
+        sessionsWeekRes,
+        sessionsMonthRes,
+        sessionsYearRes,
+        avgDurationRes,
+        newPatientsTodayRes,
+        newPatientsWeekRes,
+        newPatientsMonthRes,
+    ] = await Promise.all([
+        pool.query(`SELECT COUNT(*)::bigint AS total FROM patients`),
+        pool.query(`SELECT COUNT(*)::bigint AS total FROM consultation_sessions`),
+        pool.query(`
+            SELECT COUNT(*)::bigint AS total
+            FROM consultation_sessions
+            WHERE ended_at IS NULL
+              AND LOWER(status) IN ('recording', 'processing')
+        `),
+        pool.query(`
+            SELECT COUNT(*)::bigint AS total
+            FROM consultation_sessions
+            WHERE ended_at IS NOT NULL OR LOWER(status) = 'completed'
+        `),
+        pool.query(`SELECT COUNT(*)::bigint AS total FROM consultation_sessions WHERE created_at::date = CURRENT_DATE`),
+        pool.query(`SELECT COUNT(*)::bigint AS total FROM consultation_sessions WHERE created_at >= date_trunc('week', NOW())`),
+        pool.query(`SELECT COUNT(*)::bigint AS total FROM consultation_sessions WHERE created_at >= date_trunc('month', NOW())`),
+        pool.query(`SELECT COUNT(*)::bigint AS total FROM consultation_sessions WHERE created_at >= date_trunc('year', NOW())`),
+        pool.query(`
+            SELECT COALESCE(AVG(EXTRACT(EPOCH FROM (ended_at - started_at))), 0)::double precision AS avg_seconds
+            FROM consultation_sessions
+            WHERE ended_at IS NOT NULL
+        `),
+        pool.query(`SELECT COUNT(*)::bigint AS total FROM patients WHERE created_at >= NOW() - INTERVAL '24 hours'`),
+        pool.query(`SELECT COUNT(*)::bigint AS total FROM patients WHERE created_at >= date_trunc('week', NOW())`),
+        pool.query(`SELECT COUNT(*)::bigint AS total FROM patients WHERE created_at >= date_trunc('month', NOW())`),
+    ]);
+
+    const totalSessions = Number(totalSessionsRes.rows[0]?.total || 0);
+    const completedSessions = Number(completedSessionsRes.rows[0]?.total || 0);
+    const completionRate = totalSessions > 0 ? (completedSessions / totalSessions) * 100 : 0;
+
+    return {
+        generatedAt: new Date().toISOString(),
+        patients: {
+            total: Number(totalPatientsRes.rows[0]?.total || 0),
+            newToday: Number(newPatientsTodayRes.rows[0]?.total || 0),
+            newThisWeek: Number(newPatientsWeekRes.rows[0]?.total || 0),
+            newThisMonth: Number(newPatientsMonthRes.rows[0]?.total || 0),
+        },
+        sessions: {
+            total: totalSessions,
+            active: Number(activeSessionsRes.rows[0]?.total || 0),
+            completed: completedSessions,
+            created: {
+                today: Number(sessionsTodayRes.rows[0]?.total || 0),
+                thisWeek: Number(sessionsWeekRes.rows[0]?.total || 0),
+                thisMonth: Number(sessionsMonthRes.rows[0]?.total || 0),
+                thisYear: Number(sessionsYearRes.rows[0]?.total || 0),
+            },
+            avgDurationSeconds: Number(avgDurationRes.rows[0]?.avg_seconds || 0),
+            completionRatePct: completionRate,
+        }
+    };
+}
+
+app.get("/api/stats", requireLogin, async (req, res) => {
+    try {
+        const user = await getSessionUser(req);
+        if (!user) return res.status(401).json({ error: "Unauthorized" });
+
+        const now = Date.now();
+        if (!statsCache.value || statsCache.expiresAt <= now) {
+            const snapshot = await computeStatsSnapshot();
+            statsCache = { value: snapshot, expiresAt: now + STATS_TTL_MS };
+        }
+
+        const role = String(user.userrole || "").toLowerCase();
+        if (role === "assistant") {
+            return res.json({
+                role,
+                generatedAt: statsCache.value.generatedAt,
+                patients: statsCache.value.patients,
+                sessions: {
+                    total: statsCache.value.sessions.total,
+                    active: statsCache.value.sessions.active,
+                    completed: statsCache.value.sessions.completed,
+                    created: statsCache.value.sessions.created,
+                    avgDurationSeconds: statsCache.value.sessions.avgDurationSeconds,
+                    completionRatePct: statsCache.value.sessions.completionRatePct,
+                },
+                canViewTranscripts: false
+            });
+        }
+
+        return res.json({ role, ...statsCache.value, canViewTranscripts: role === "doctor" });
+    } catch (err) {
+        console.error("Stats error:", err.message);
+        return res.status(500).json({ error: "Failed to compute stats" });
+    }
+});
+
+// Doctor-only consultation session lifecycle + transcript storage.
+app.post("/api/sessions/start", requireLogin, requireRole("doctor"), async (req, res) => {
+    try {
+        const { patientId, appointmentId } = req.body || {};
+        if (!patientId) return res.status(400).json({ error: "patientId is required" });
+        const patientIdStr = String(patientId);
+        if (!/^\d+$/.test(patientIdStr)) return res.status(400).json({ error: "patientId must be numeric" });
+
+        const doctorUserId = req.currentUser.userid;
+        const insertRes = await pool.query(
+            `
+            INSERT INTO consultation_sessions (patientid, doctor_userid, appointmentid, status)
+            VALUES ($1, $2, $3, 'Recording')
+            RETURNING sessionid, started_at
+            `,
+            [patientIdStr, doctorUserId, appointmentId || null]
+        );
+
+        return res.json({ sessionId: insertRes.rows[0].sessionid, startedAt: insertRes.rows[0].started_at });
+    } catch (err) {
+        console.error("Start session error:", err.message);
+        return res.status(500).json({ error: "Failed to start session" });
+    }
+});
+
+app.post("/api/sessions/:sessionId/transcript", requireLogin, requireRole("doctor"), async (req, res) => {
+    try {
+        const sessionId = req.params.sessionId;
+        const { transcript, status } = req.body || {};
+        if (typeof transcript !== "string") return res.status(400).json({ error: "transcript must be a string" });
+
+        const doctorUserId = req.currentUser.userid;
+        const newStatus = typeof status === "string" && status.trim() ? status.trim() : null;
+
+        const updateRes = await pool.query(
+            `
+            UPDATE consultation_sessions
+            SET transcript = $1,
+                status = COALESCE($2, status),
+                updated_at = NOW()
+            WHERE sessionid = $3
+              AND doctor_userid = $4
+            `,
+            [transcript, newStatus, sessionId, doctorUserId]
+        );
+
+        if (updateRes.rowCount === 0) return res.status(404).json({ error: "Session not found" });
+        return res.json({ success: true });
+    } catch (err) {
+        console.error("Update transcript error:", err.message);
+        return res.status(500).json({ error: "Failed to update transcript" });
+    }
+});
+
+app.post("/api/sessions/:sessionId/end", requireLogin, requireRole("doctor"), async (req, res) => {
+    try {
+        const sessionId = req.params.sessionId;
+        const doctorUserId = req.currentUser.userid;
+
+        const endRes = await pool.query(
+            `
+            UPDATE consultation_sessions
+            SET ended_at = NOW(),
+                status = 'Completed',
+                updated_at = NOW()
+            WHERE sessionid = $1
+              AND doctor_userid = $2
+            RETURNING started_at, ended_at
+            `,
+            [sessionId, doctorUserId]
+        );
+
+        if (endRes.rowCount === 0) return res.status(404).json({ error: "Session not found" });
+
+        const startedAt = new Date(endRes.rows[0].started_at);
+        const endedAt = new Date(endRes.rows[0].ended_at);
+        const durationSeconds = Math.max(0, Math.floor((endedAt.getTime() - startedAt.getTime()) / 1000));
+
+        return res.json({ success: true, durationSeconds });
+    } catch (err) {
+        console.error("End session error:", err.message);
+        return res.status(500).json({ error: "Failed to end session" });
+    }
+});
+
+app.get("/api/sessions/recent", requireLogin, requireRole("doctor"), async (req, res) => {
+    try {
+        const doctorUserId = req.currentUser.userid;
+        const limit = Math.min(100, Math.max(1, parseInt(req.query.limit || "20", 10)));
+
+        const recentRes = await pool.query(
+            `
+            SELECT sessionid, patientid, status, started_at, ended_at, created_at
+            FROM consultation_sessions
+            WHERE doctor_userid = $1
+            ORDER BY created_at DESC
+            LIMIT $2
+            `,
+            [doctorUserId, limit]
+        );
+
+        return res.json({ sessions: recentRes.rows });
+    } catch (err) {
+        console.error("Recent sessions error:", err.message);
+        return res.status(500).json({ error: "Failed to load sessions" });
+    }
+});
+
+app.get("/api/sessions/:sessionId", requireLogin, requireRole("doctor"), async (req, res) => {
+    try {
+        const doctorUserId = req.currentUser.userid;
+        const sessionId = req.params.sessionId;
+
+        const sessionRes = await pool.query(
+            `
+            SELECT sessionid, patientid, status, started_at, ended_at, transcript, created_at, updated_at
+            FROM consultation_sessions
+            WHERE sessionid = $1
+              AND doctor_userid = $2
+            `,
+            [sessionId, doctorUserId]
+        );
+
+        if (sessionRes.rows.length === 0) return res.status(404).json({ error: "Session not found" });
+        return res.json({ session: sessionRes.rows[0] });
+    } catch (err) {
+        console.error("Get session error:", err.message);
+        return res.status(500).json({ error: "Failed to load session" });
+    }
+});
 
 app.get('/login', (req, res) => {
  res.render('login', { error: req.query?.error });
@@ -579,6 +860,14 @@ app.get('/history', requireLogin, requireRole("doctor"), (req, res) => {
     res.render('history', { currentPage: 'history', userRole: 'doctor' });
 });
 
+// Sessions pages intentionally removed: keep old URLs from breaking navigation.
+app.get('/sessions', requireLogin, requireRole("doctor"), (req, res) => {
+    return res.redirect('/history');
+});
+app.get('/sessions/:sessionId', requireLogin, requireRole("doctor"), (req, res) => {
+    return res.redirect('/history');
+});
+
 app.get('/profile', requireLogin, async (req, res) => {
     try {
         const currentUserId = req.session.userId;
@@ -724,44 +1013,66 @@ app.post('/upload-image', requireLogin, requireRole("assistant"), upload.single(
     }
 });
 
-function analyzeReport(text) {
-    const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
-    const results = [];
+async function analyzeReport(text) {
 
-    const unitPattern = /(mg\/dL|ng\/mL|µ?IU\/mL|g\/dL|mmol\/L|mEq\/L|IU\/L)/i;
+    const prompt = `
+You are a medical report analyzer.
 
-    for (let line of lines) {
+Extract the following from the report:
 
-        const unitMatch = line.match(unitPattern);
-        if (!unitMatch) continue;
+1. Report name
+2. Test names
+3. Test values
 
-        const unit = unitMatch[0];
-        const unitIndex = line.indexOf(unit);
+Return ONLY valid JSON in this format:
 
-        // Look only at text BEFORE unit
-        const beforeUnit = line.substring(0, unitIndex);
+{
+ "report_name": "name of report",
+ "tests": [
+    {
+      "test_name": "test name",
+      "value": "value with unit"
+    }
+ ]
+}
 
-        // Extract LAST number before unit
-        const numbers = beforeUnit.match(/\b\d+\.?\d*\b/g);
-        if (!numbers) continue;
+Ignore hospital address, doctor notes and patient details.
 
-        const value = parseFloat(numbers[numbers.length - 1]);
+Report Text:
+${text}
+`;
 
-        // Everything before that number = test name
-        const valueIndex = beforeUnit.lastIndexOf(numbers[numbers.length - 1]);
-        const testName = beforeUnit.substring(0, valueIndex).trim();
+    const response = await groq.chat.completions.create({
+        model: "llama-3.3-70b-versatile",
+        temperature: 0,
+        messages: [{ role: "user", content: prompt }]
+    });
 
-        // Skip weird header lines
-        if (testName.length < 2) continue;
+    let result = response.choices[0].message.content;
 
-        results.push({
-            testName,
-            value,
-            unit
-        });
+    // Extract JSON
+    const jsonMatch = result.match(/\{[\s\S]*\}/);
+
+    if (!jsonMatch) {
+        throw new Error("No JSON found in LLM response");
     }
 
-    return results;
+    const parsed = JSON.parse(jsonMatch[0]);
+
+    // Convert to your existing format
+    const structured = parsed.tests.map(t => {
+
+        const valueMatch = t.value.match(/[\d.]+/);
+        const unitMatch = t.value.match(/[a-zA-Z\/µ]+/);
+
+        return {
+            testName: t.test_name,
+            value: valueMatch ? parseFloat(valueMatch[0]) : null,
+            unit: unitMatch ? unitMatch[0] : ""
+        };
+    });
+
+    return structured;
 }
 
 app.post('/upload-report', upload.single('file'), async (req, res) => {
@@ -799,7 +1110,7 @@ app.post('/upload-report', upload.single('file'), async (req, res) => {
         console.log("Cleaned Extracted Text:", extractedText);
 
         // 🔥 THEN analyze
-        const structuredData = analyzeReport(extractedText);
+        const structuredData = await analyzeReport(extractedText);
         console.log("STRUCTURED DATA:", structuredData);
 
         await pool.query(

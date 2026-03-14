@@ -47,10 +47,11 @@
 .quick-stats {
     display: flex;
     gap: 15px;
+    flex-wrap: wrap;
 }
 
 .stat-card {
-    flex: 1;
+    flex: 1 1 160px;
     padding: 15px;
     border-radius: 10px;
     color: var(--color-white);
@@ -59,6 +60,10 @@
 
 .stat-card.blue-bg { background-color: #4b92e7; }
 .stat-card.green-bg { background-color: var(--color-secondary-green); }
+.stat-card.orange-bg { background-color: #f59e0b; }
+.stat-card.purple-bg { background-color: #8b5cf6; }
+.stat-card.gray-bg { background-color: #64748b; }
+.stat-card.teal-bg { background-color: #0f766e; }
 
 .stat-card h4 { font-size: 1em; margin-bottom: 5px; }
 .stat-card p { font-size: 1.8em; font-weight: bold; }

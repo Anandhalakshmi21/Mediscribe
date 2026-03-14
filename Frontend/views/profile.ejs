@@ -72,16 +72,55 @@
 
         <section class="info-section">
             <h3><span class="material-icons">analytics</span> Practice Metrics</h3>
-            <div class="metrics-grid">
-                <div class="metric-card green-bg">
-                    <h4>Patients (Month)</h4>
-                    <p>150</p>
+            <section class="quick-stats" id="statsCards" data-role="<%= userRole %>">
+                <div class="stat-card blue-bg">
+                    <h4>Total Patients</h4>
+                    <p id="statPatientsTotal">—</p>
                 </div>
-                <div class="metric-card blue-bg">
-                    <h4>Patients (Year)</h4>
-                    <p>1,820</p>
+                <div class="stat-card blue-bg">
+                    <h4>New Patients (24h)</h4>
+                    <p id="statPatientsNewToday">—</p>
                 </div>
-            </div>
+                <div class="stat-card blue-bg">
+                    <h4>New Patients (Month)</h4>
+                    <p id="statPatientsNewMonth">—</p>
+                </div>
+
+                <div class="stat-card blue-bg">
+                    <h4>Total Sessions</h4>
+                    <p id="statSessionsTotal">—</p>
+                </div>
+                <div class="stat-card blue-bg">
+                    <h4>Active Sessions</h4>
+                    <p id="statSessionsActive">—</p>
+                </div>
+                <div class="stat-card blue-bg">
+                    <h4>Completed</h4>
+                    <p id="statSessionsCompleted">—</p>
+                </div>
+
+                <div class="stat-card blue-bg">
+                    <h4>Sessions (Today)</h4>
+                    <p id="statSessionsToday">—</p>
+                </div>
+                <div class="stat-card blue-bg">
+                    <h4>Sessions (Week)</h4>
+                    <p id="statSessionsWeek">—</p>
+                </div>
+                <div class="stat-card blue-bg">
+                    <h4>Sessions (Month)</h4>
+                    <p id="statSessionsMonth">—</p>
+                </div>
+
+                <div class="stat-card blue-bg">
+                    <h4>Avg. Duration</h4>
+                    <p id="statSessionsAvgDuration">—</p>
+                </div>
+                <div class="stat-card blue-bg">
+                    <h4>Completion Rate</h4>
+                    <p id="statSessionsCompletionRate">—</p>
+                </div>
+            </section>
         </section>
 
         <section class="info-section">
@@ -105,5 +144,6 @@
 
     <script src="/js/main.js"></script>
     <script src="/js/profile.js"></script>
+    <script src="/js/stats.js"></script>
 </body>
 </html>
