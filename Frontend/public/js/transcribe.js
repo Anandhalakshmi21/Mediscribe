@@ -3,6 +3,9 @@ let audioChunks = [];
 let isRecording = false;
 let fullTranscript = "";
 let isEditMode = false;
+let chunkInterval;
+let currentSessionId = null;
+let pendingChunkPromise = null;
 
 const startBtn = document.getElementById("startMic");
 const pauseBtn = document.getElementById("pauseMic");
@@ -10,7 +13,9 @@ const stopBtn = document.getElementById("stopMic");
 const outputDiv = document.getElementById("transcriptionOutput");
 
 // 🔴 Replace with your ngrok URL
-const API_URL = `${baseUrl}/transcribe`;
+
+
+const API_URL =  "https://helene-overdogmatic-seth.ngrok-free.dev/transcribe";
 // ⚠️ WARNING: The Gemini API key will be exposed in client-side code.
 // Only use this for testing. Replace with your key or add a backend proxy for production.
 
@@ -70,6 +75,7 @@ const API_URL = `${baseUrl}/transcribe`;
 
 async function startRecording() {
     try {
+        await ensureConsultationSession();
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
         // ✅ Explicitly record as webm (opus)
@@ -89,8 +95,12 @@ async function startRecording() {
             });
 
             audioChunks = [];
-
-            await sendAudioChunk(blob);
+            pendingChunkPromise = sendAudioChunk(blob);
+            try {
+                await pendingChunkPromise;
+            } finally {
+                pendingChunkPromise = null;
+            }
         };
 
         // UI updates
@@ -116,11 +126,95 @@ async function startRecording() {
                 mediaRecorder.stop();
                 mediaRecorder.start();
             }
-        }, 2000);
+        }, 4000);
 
     } catch (err) {
         console.error("Mic access error:", err);
-        alert("Microphone access denied.");
+        alert(err?.message || "Microphone access denied.");
+    }
+}
+
+async function ensureConsultationSession() {
+    if (currentSessionId) return currentSessionId;
+
+    const patientId = window.currentPatientId || "UNKNOWN";
+    if (patientId === "UNKNOWN") {
+        throw new Error("No patient selected for this consultation.");
+    }
+    const resp = await fetch("/api/sessions/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ patientId })
+    });
+
+    if (!resp.ok) {
+        const text = await resp.text().catch(() => "");
+        throw new Error(`Failed to start session (${resp.status}): ${text}`);
+    }
+
+    const data = await resp.json();
+    currentSessionId = data.sessionId;
+    return currentSessionId;
+}
+
+async function saveConsultationRecord(patientId, opts = {}) {
+    const quiet = Boolean(opts.quiet);
+    const liveDiv = document.querySelector(".live-text");
+    const transcript = (liveDiv ? liveDiv.innerText : fullTranscript || "").trim();
+
+    if (!transcript) {
+        if (!quiet) alert("Nothing to save yet.");
+        return;
+    }
+
+    await ensureConsultationSession();
+
+    const resp = await fetch(`/api/sessions/${encodeURIComponent(currentSessionId)}/transcript`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ transcript, status: "Processing" })
+    });
+
+    if (!resp.ok) {
+        const text = await resp.text().catch(() => "");
+        throw new Error(`Save failed (${resp.status}): ${text}`);
+    }
+
+    if (!quiet) alert("Session saved.");
+}
+
+async function endSessionPrompt() {
+    const patientId = window.currentPatientId || "UNKNOWN";
+    const confirmed = confirm("End this consultation session? This will save and complete the session.");
+    if (!confirmed) return;
+
+    try {
+        if (isRecording) {
+            stopRecording();
+            if (pendingChunkPromise) {
+                await Promise.race([
+                    pendingChunkPromise,
+                    new Promise(resolve => setTimeout(resolve, 8000))
+                ]);
+            }
+        }
+
+        await saveConsultationRecord(patientId, { quiet: true });
+
+        if (currentSessionId) {
+            await fetch(`/api/sessions/${encodeURIComponent(currentSessionId)}/end`, { method: "POST" });
+        }
+
+        await fetch("/complete-appointment", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ patientId })
+        }).catch(() => null);
+
+        window.location.href = "/home/doctor";
+    } catch (err) {
+        console.error(err);
+        alert("Failed to end session. Please try again.");
     }
 }
 
@@ -232,9 +326,7 @@ function stopRecording() {
 async function sendAudioChunk(blob) {
     try {
         const formData = new FormData();
-
-        // ✅ filename matches format
-        formData.append("file", blob, "chunk.webm");
+        formData.append("file", blob, "audio.webm");
 
         const response = await fetch(API_URL, {
             method: "POST",
@@ -243,17 +335,28 @@ async function sendAudioChunk(blob) {
 
         const data = await response.json();
 
-        if (data.transcription) {
-            const englishOnly = data.transcription.replace(
-                /[^a-zA-Z0-9.,!?'"()\-\s]/g,
-                ""
-            );
+        console.log("TRANSCRIBE RESPONSE:", data);
 
-            fullTranscript += " " + englishOnly;
-
-            document.getElementById("transcriptionOutput").innerHTML =
-                `<div class="live-text">${fullTranscript}</div>`;
+        if (!data.transcription) {
+            console.warn("No transcription returned");
+            return;
         }
+
+        const englishOnly = data.transcription.replace(
+            /[^a-zA-Z0-9.,!?'"()\-\s]/g,
+            ""
+        );
+
+        fullTranscript += " " + englishOnly;
+
+        let liveDiv = document.querySelector(".live-text");
+
+        if (!liveDiv) {
+            outputDiv.innerHTML = `<div class="live-text"></div>`;
+            liveDiv = document.querySelector(".live-text");
+        }
+
+        liveDiv.innerText = fullTranscript;
 
     } catch (error) {
         console.error("Upload error:", error);
@@ -304,7 +407,7 @@ function updatePredictionSidebar(data) {
 }
 
 async function analyzeTranscript() {
-
+ 
     const transcript = document.querySelector(".live-text").innerText;
 
     const response = await fetch("/analyze-transcript", {
@@ -495,4 +598,17 @@ function toggleInlineEdit() {
 
         isEditMode = true;
     }
+}
+
+function saveEditedNotes() {
+    const textarea = document.getElementById("editableNotes");
+    const text = (textarea?.value || "").trim();
+    if (!text) return;
+    fullTranscript = text;
+    outputDiv.innerHTML = `<div class="live-text">${text}</div>`;
+    closeModal("editModal");
+}
+
+function finalizeNextAppointment() {
+    closeModal("nextAppointmentModal");
 }
