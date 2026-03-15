@@ -1,3 +1,4 @@
+
 import express from "express";
 import pkg from "pg";
 import dotenv from "dotenv";
@@ -13,9 +14,8 @@ import { createRequire } from "module";
 import Groq from "groq-sdk";
 
 const groq = new Groq({
-    apiKey: process.env.GROQ_API_KEY
+    apiKey: "-----"
 });
-
 
 const require = createRequire(import.meta.url);
 
@@ -778,10 +778,23 @@ app.post("/analyze-transcript", requireLogin, requireRole("doctor"), async (req,
       headers: {
         "Content-Type": "application/json"
       },
-      body: JSON.stringify({ transcript })
+      body: JSON.stringify({ 
+        transcript: transcript
+       })
     });
 
-    const data = await response.json();
+    //const data = await response.json();
+    const text = await response.text();
+
+    let data;
+
+    try {
+        data = JSON.parse(text);
+        console.log("API response:", data);
+    } catch (err) {
+        console.error("Server returned non-JSON:", text);
+        return res.status(500).json({ error: "Python API returned invalid response" });
+    }
 
     console.log("Colab returned:", JSON.stringify(data, null, 2));
 
@@ -1074,7 +1087,6 @@ ${text}
 
     return structured;
 }
-
 app.post('/upload-report', upload.single('file'), async (req, res) => {
     try {
         const { patientId } = req.body;
@@ -1187,4 +1199,5 @@ app.get('/logout', (req, res) => {
 
 app.listen(port, () => {
     console.log(`Server is running on http://localhost:${port}`);
-});
+}
+)
