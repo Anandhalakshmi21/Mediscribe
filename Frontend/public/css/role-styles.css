@@ -471,6 +471,8 @@
 .item-details p {
     margin: 3px 0;
     font-size: 0.9em;
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 
 .btn-details {

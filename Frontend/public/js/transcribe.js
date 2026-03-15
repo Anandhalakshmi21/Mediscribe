@@ -50,6 +50,20 @@ function queueTranscriptAnalysis() {
     }, ANALYZE_DEBOUNCE_MS);
 }
 
+async function saveSessionAnalysis(sessionId, analysisPayload) {
+    if (!sessionId) return;
+
+    try {
+        await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/analysis`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ analysis: analysisPayload })
+        });
+    } catch (err) {
+        console.warn("Failed to persist analysis:", err);
+    }
+}
+
 document.addEventListener("DOMContentLoaded", () => {
     const status = document.querySelector("#predictionSidebar .status-message");
     if (status && !status.textContent.trim()) {
@@ -497,6 +511,7 @@ async function analyzeTranscript(transcriptOverride) {
 
         lastAnalyzedTranscript = transcript;
         updatePredictionSidebar(data);
+        await saveSessionAnalysis(currentSessionId, data);
     } catch (err) {
         console.error(err);
         setPredictionStatus("Waiting for input...");

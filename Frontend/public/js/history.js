@@ -30,13 +30,13 @@ function toggleDetails(elementId) {
 /**
  * Simulates viewing the full record (e.g., redirect to a detailed view page).
  * @param {string} patientId - The ID of the patient.
- * @param {string} date - The date of the consultation.
+ * @param {string} sessionId - The session ID for the consultation.
  */
-function viewFullRecord(patientId, date) {
-    console.log(`Redirecting to full record for Patient: ${patientId}, Date: ${date}`);
+function viewFullRecord(patientId, sessionId) {
+    console.log(`Viewing full record for Patient: ${patientId}, Session: ${sessionId}`);
     // In a real app, this would redirect to a page showing the full transcription, images, and notes.
-    alert(`Viewing full record for ${patientId} on ${date}.`);
-    // Example: window.location.href = `/record-detail?pid=${patientId}&date=${date}`;
+    alert(`Viewing full record for PID${patientId} (Session ${sessionId}).`);
+    // Example: window.location.href = `/record-detail?sessionId=${sessionId}`;
 }
 
 /**

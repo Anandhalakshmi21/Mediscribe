@@ -71,9 +71,16 @@ async function ensureAnalyticsSchema() {
             started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             ended_at TIMESTAMPTZ,
             transcript TEXT,
+            analysis_json JSONB,
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         )
+    `);
+
+    // In case the table already existed before analysis_json was added.
+    await pool.query(`
+        ALTER TABLE consultation_sessions
+        ADD COLUMN IF NOT EXISTS analysis_json JSONB
     `);
 
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_consultation_sessions_created_at ON consultation_sessions (created_at)`);
@@ -408,6 +415,34 @@ app.post("/api/sessions/:sessionId/end", requireLogin, requireRole("doctor"), as
     }
 });
 
+app.post("/api/sessions/:sessionId/analysis", requireLogin, requireRole("doctor"), async (req, res) => {
+    try {
+        const sessionId = req.params.sessionId;
+        const { analysis } = req.body || {};
+        if (analysis === undefined) {
+            return res.status(400).json({ error: "analysis is required" });
+        }
+
+        const doctorUserId = req.currentUser.userid;
+        const updateRes = await pool.query(
+            `
+            UPDATE consultation_sessions
+            SET analysis_json = $1,
+                updated_at = NOW()
+            WHERE sessionid = $2
+              AND doctor_userid = $3
+            `,
+            [analysis, sessionId, doctorUserId]
+        );
+
+        if (updateRes.rowCount === 0) return res.status(404).json({ error: "Session not found" });
+        return res.json({ success: true });
+    } catch (err) {
+        console.error("Update analysis error:", err.message);
+        return res.status(500).json({ error: "Failed to update analysis" });
+    }
+});
+
 app.get("/api/sessions/recent", requireLogin, requireRole("doctor"), async (req, res) => {
     try {
         const doctorUserId = req.currentUser.userid;
@@ -438,7 +473,7 @@ app.get("/api/sessions/:sessionId", requireLogin, requireRole("doctor"), async (
 
         const sessionRes = await pool.query(
             `
-            SELECT sessionid, patientid, status, started_at, ended_at, transcript, created_at, updated_at
+            SELECT sessionid, patientid, status, started_at, ended_at, transcript, analysis_json, created_at, updated_at
             FROM consultation_sessions
             WHERE sessionid = $1
               AND doctor_userid = $2
@@ -926,8 +961,43 @@ app.get('/appointment', requireLogin, requireRole("doctor"), async (req, res) =>
     }
 });
 
-app.get('/history', requireLogin, requireRole("doctor"), (req, res) => {
-    res.render('history', { currentPage: 'history', userRole: 'doctor' });
+app.get('/history', requireLogin, requireRole("doctor"), async (req, res) => {
+    try {
+        const doctorUserId = req.currentUser.userid;
+
+        const recordsRes = await pool.query(
+            `
+            SELECT *
+            FROM (
+                SELECT DISTINCT ON (s.patientid)
+                    s.sessionid,
+                    s.patientid,
+                    s.status,
+                    s.started_at,
+                    s.ended_at,
+                    s.created_at,
+                    s.analysis_json,
+                    p.firstname,
+                    p.lastname
+                FROM consultation_sessions s
+                JOIN patients p ON p.patientid = s.patientid
+                WHERE s.doctor_userid = $1
+                ORDER BY s.patientid, s.created_at DESC
+            ) latest
+            ORDER BY latest.created_at DESC
+            `,
+            [doctorUserId]
+        );
+
+        return res.render('history', {
+            currentPage: 'history',
+            userRole: 'doctor',
+            records: recordsRes.rows
+        });
+    } catch (err) {
+        console.error("History load error:", err.message);
+        return res.render('history', { currentPage: 'history', userRole: 'doctor', records: [] });
+    }
 });
 
 // Sessions pages intentionally removed: keep old URLs from breaking navigation.

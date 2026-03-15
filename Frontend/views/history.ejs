@@ -20,6 +20,52 @@
         </div>
     </header>
 
+    <%
+        const safeArray = (v) => Array.isArray(v) ? v : [];
+        const analysisRoot = (row) => {
+            const payload = row && row.analysis_json;
+            if (!payload || typeof payload !== 'object') return null;
+            if (payload.analysis && typeof payload.analysis === 'object') return payload.analysis;
+            return payload;
+        };
+        const getSymptoms = (row) => {
+            const payload = row && row.analysis_json;
+            const root = analysisRoot(row);
+            const raw = (payload && payload.symptoms_detected && payload.symptoms_detected.symptoms)
+                || (root && root.symptoms_detected && root.symptoms_detected.symptoms);
+            if (Array.isArray(raw)) return raw.map(s => String(s).trim()).filter(Boolean);
+            if (typeof raw === 'string') return raw.split(',').map(s => s.trim()).filter(Boolean);
+            return [];
+        };
+        const getPrescription = (row) => {
+            const root = analysisRoot(row);
+            if (!root) return null;
+            return root.doctor_prescription || root.doctorPrescription || null;
+        };
+        const formatMedicationEntry = (m) => {
+            if (!m) return null;
+            if (typeof m === 'string') return m.trim() || null;
+            if (typeof m !== 'object') return null;
+
+            const name =
+                m.name || m.medication || m.medicine || m.drug || m.medication_name || m.medicationName || m.medName;
+            if (!name) return null;
+
+            const dosage = m.dosage || m.dose || m.strength || m.quantity || m.amount;
+            const frequency = m.frequency || m.freq || m.timing || m.when || m.schedule;
+            const duration = m.duration || m.days || m.period || m.for;
+
+            const details = [dosage, frequency, duration].filter(Boolean).map(v => String(v).trim()).filter(Boolean).join(", ");
+            return details ? `${String(name).trim()} (${details})` : String(name).trim();
+        };
+        const formatMedications = (medications) => {
+            if (!medications) return "";
+            if (typeof medications === 'string') return medications.trim();
+            if (!Array.isArray(medications)) return "";
+            return medications.map(formatMedicationEntry).filter(Boolean).join(", ");
+        };
+    %>
+
     <main class="content-area history-page">
         
         <div class="search-container">
@@ -32,46 +78,45 @@
         <h2 class="section-title">All Patient Records</h2>
 
         <section class="history-list" id="historyList">
-            
-            <div class="date-group">
-                
-                <div class="history-item" onclick="toggleDetails('PID1001-20251208')">
-                    <div class="item-summary">
-                        <p class="name">Aisha Khan</p>
-                        <p class="id">PID1001</p>
-                        <span class="material-icons expand-icon">expand_more</span>
+            <% if (typeof records !== 'undefined' && records && records.length) { %>
+                <% records.forEach(row => { 
+                    const detailId = `PID${row.patientid}-S${row.sessionid}`;
+                    const symptoms = getSymptoms(row);
+                    const prescription = getPrescription(row) || {};
+                    const diagnosis = prescription.disease || prescription.diagnosis || "";
+                    const meds = formatMedications(prescription.medications || prescription.meds || prescription.drugs);
+                    const createdDate = row.created_at ? new Date(row.created_at) : null;
+                    const createdLabel = createdDate ? createdDate.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : '';
+                %>
+                    <div class="date-group">
+                        <div class="history-item" onclick="toggleDetails('<%= detailId %>')">
+                            <div class="item-summary">
+                                <p class="name"><%= (row.firstname || '') + ' ' + (row.lastname || '') %></p>
+                                <p class="id">PID<%= row.patientid %></p>
+                                <span class="material-icons expand-icon">expand_more</span>
+                            </div>
+                            <div class="item-details" id="<%= detailId %>">
+                                <h4>Consultation Summary <%= createdLabel ? '(' + createdLabel + ')' : '' %></h4>
+                                <p><strong>Chief Complaint:</strong> <%= symptoms.length ? symptoms.join(', ') : '—' %></p>
+                                <p><strong>Diagnosis:</strong> <%= diagnosis ? diagnosis : '—' %></p>
+                                <p><strong>Medication:</strong> <%= meds ? meds : '—' %></p>
+                                <button class="btn btn-details" onclick="event.stopPropagation(); viewFullRecord('<%= row.patientid %>', '<%= row.sessionid %>')">View Full Record</button>
+                            </div>
+                        </div>
                     </div>
-                    <div class="item-details" id="PID1001-20251208">
-                        <h4>Consultation Summary</h4>
-                        <p><strong>Chief Complaint:</strong> Recurring migraine.</p>
-                        <p><strong>Diagnosis:</strong> Tension Headache.</p>
-                        <p><strong>Medication:</strong> Ibuprofen (as needed).</p>
-                        <p><strong>Images/Files:</strong> 1 uploaded file.</p>
-                        <button class="btn btn-details" onclick="event.stopPropagation(); viewFullRecord('PID1001', '2025-12-08')">View Full Record</button>
+                <% }) %>
+            <% } else { %>
+                <div class="date-group">
+                    <div class="history-item" style="cursor: default;">
+                        <div class="item-summary">
+                            <p class="name">No records yet</p>
+                            <p class="id"></p>
+                            <span class="material-icons expand-icon">history</span>
+                        </div>
                     </div>
                 </div>
-            </div>
-
-            <div class="date-group">
-                
-                <div class="history-item" onclick="toggleDetails('PID1002-20251125')">
-                    <div class="item-summary">
-                        <p class="name">Bimal Das</p>
-                        <p class="id">PID1002</p>
-                        <span class="material-icons expand-icon">expand_more</span>
-                    </div>
-                    <div class="item-details" id="PID1002-20251125">
-                        <h4>Consultation Summary</h4>
-                        <p><strong>Chief Complaint:</strong> Persistent cough and mild fever.</p>
-                        <p><strong>Diagnosis:</strong> Seasonal Flu.</p>
-                        <p><strong>Medication:</strong> Amoxicillin 500mg.</p>
-                        <p><strong>Images/Files:</strong> None.</p>
-                        <button class="btn btn-details" onclick="event.stopPropagation(); viewFullRecord('PID1002', '2025-11-25')">View Full Record</button>
-                    </div>
-                </div>
-            </div>
-            
-            </section>
+            <% } %>
+        </section>
 
     </main>
 
