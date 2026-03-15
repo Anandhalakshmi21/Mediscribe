@@ -6,6 +6,13 @@ let isEditMode = false;
 let chunkInterval;
 let currentSessionId = null;
 let pendingChunkPromise = null;
+let analysisInFlight = false;
+let analysisTimer = null;
+let lastAnalysisAt = 0;
+let lastAnalyzedTranscript = "";
+
+const MIN_ANALYZE_INTERVAL_MS = 5000;
+const ANALYZE_DEBOUNCE_MS = 800;
 
 const startBtn = document.getElementById("startMic");
 const pauseBtn = document.getElementById("pauseMic");
@@ -16,6 +23,39 @@ const outputDiv = document.getElementById("transcriptionOutput");
 
 
 const API_URL =  "https://helene-overdogmatic-seth.ngrok-free.dev/transcribe";
+
+function setPredictionStatus(text) {
+    const status = document.querySelector("#predictionSidebar .status-message");
+    if (status) status.textContent = text == null ? "" : String(text);
+}
+
+function extractPredictionText(payload) {
+    if (!payload) return null;
+
+    if (typeof payload.prediction === "string") return payload.prediction;
+    if (typeof payload.predictions === "string") return payload.predictions;
+
+    const analysis = payload.analysis;
+    if (typeof analysis === "string") return analysis;
+    if (analysis && typeof analysis.prediction === "string") return analysis.prediction;
+    if (analysis && typeof analysis.predictions === "string") return analysis.predictions;
+
+    return null;
+}
+
+function queueTranscriptAnalysis() {
+    if (analysisTimer) window.clearTimeout(analysisTimer);
+    analysisTimer = window.setTimeout(() => {
+        analyzeTranscript().catch(err => console.warn("Analyze failed:", err));
+    }, ANALYZE_DEBOUNCE_MS);
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+    const status = document.querySelector("#predictionSidebar .status-message");
+    if (status && !status.textContent.trim()) {
+        status.textContent = "Waiting for input...";
+    }
+});
 // ⚠️ WARNING: The Gemini API key will be exposed in client-side code.
 // Only use this for testing. Replace with your key or add a backend proxy for production.
 
@@ -358,6 +398,9 @@ async function sendAudioChunk(blob) {
 
         liveDiv.innerText = fullTranscript;
 
+        // Mirror the latest prediction text into the sidebar in near real-time.
+        queueTranscriptAnalysis();
+
     } catch (error) {
         console.error("Upload error:", error);
     }
@@ -371,67 +414,95 @@ function updatePredictionSidebar(data) {
     const medicationList = document.getElementById("medicationSuggestion");
     const testList = document.getElementById("testSuggestion");
 
+    if (!diseaseList || !medicationList || !testList) return;
+
     diseaseList.innerHTML = "";
     medicationList.innerHTML = "";
     testList.innerHTML = "";
 
-    if (!data.prediction || !data.prediction.predictions) {
-        console.warn("Invalid prediction structure");
+    // get predictions safely
+    const predictions = data?.analysis?.predictions || [];
+
+    if (predictions.length === 0) {
+        setPredictionStatus("No prediction available");
         return;
     }
 
-    const predictions = data.prediction.predictions;
+    predictions.forEach(pred => {
 
-    const meds = new Set();
-    const tests = new Set();
-
-    predictions.forEach(p => {
-
-        // Disease
-        const d = document.createElement("li");
-        d.textContent = p.disease;
-        diseaseList.appendChild(d);
-
-        // Medication (deduplicate)
-        if (!meds.has(p.medication)) {
-            meds.add(p.medication);
-            const m = document.createElement("li");
-            m.textContent = p.medication;
-            medicationList.appendChild(m);
+        if (pred.disease) {
+            const li = document.createElement("li");
+            li.textContent = pred.disease;
+            diseaseList.appendChild(li);
         }
 
-        // Test (deduplicate)
-        if (!tests.has(p.test)) {
-            tests.add(p.test);
-            const t = document.createElement("li");
-            t.textContent = p.test;
-            testList.appendChild(t);
+        if (pred.medication) {
+            const li = document.createElement("li");
+            li.textContent = pred.medication;
+            medicationList.appendChild(li);
         }
+
+        if (pred.test) {
+            const li = document.createElement("li");
+            li.textContent = pred.test;
+            testList.appendChild(li);
+        }
+
     });
 
-    const status = document.querySelector("#predictionSidebar .status-message");
-    if (status) {
-        status.textContent = "AI analysis completed.";
-    }
+    setPredictionStatus("Prediction ready");
 }
-async function analyzeTranscript() {
- 
-    const transcript = document.querySelector(".live-text").innerText;
 
-    const response = await fetch("/analyze-transcript", {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ transcript })
-    });
+async function analyzeTranscript(transcriptOverride) {
+    if (analysisInFlight) return;
 
-    const data = await response.json();
+    const liveEl = document.querySelector(".live-text");
+    const transcript = (typeof transcriptOverride === "string" ? transcriptOverride : (liveEl ? liveEl.innerText : "")).trim();
 
-    console.log("Prediction received:", data);
+    if (!transcript) {
+        setPredictionStatus("Waiting for input...");
+        return;
+    }
 
-    updatePredictionSidebar(data);
+    const now = Date.now();
+    if (now - lastAnalysisAt < MIN_ANALYZE_INTERVAL_MS) {
+        queueTranscriptAnalysis();
+        return;
+    }
 
+    if (transcript === lastAnalyzedTranscript) return;
+
+    analysisInFlight = true;
+    lastAnalysisAt = now;
+
+    setPredictionStatus("Analyzing...");
+
+    try {
+        const response = await fetch("/analyze-transcript", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ transcript })
+        });
+
+        if (!response.ok) {
+            const text = await response.text().catch(() => "");
+            throw new Error(`Analyze failed (${response.status}): ${text}`);
+        }
+
+        const data = await response.json();
+
+        console.log("Prediction received:", data);
+
+        lastAnalyzedTranscript = transcript;
+        updatePredictionSidebar(data);
+    } catch (err) {
+        console.error(err);
+        setPredictionStatus("Waiting for input...");
+    } finally {
+        analysisInFlight = false;
+    }
 }
 
 /**
