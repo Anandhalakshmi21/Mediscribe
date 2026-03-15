@@ -160,6 +160,23 @@ async function getSessionUser(req) {
     return userRes.rows[0] || null;
 }
 
+async function getDoctorFkValueForUserId(currentUserId) {
+    const mode = await getDbMode();
+
+    let doctorFkValue = currentUserId;
+    if (mode.appointmentsDoctorColumn === "clinicianid") {
+        const clinicianRes = await pool.query("SELECT clinicianid FROM clinicians WHERE userid = $1", [currentUserId]);
+        if (clinicianRes.rows.length === 0) {
+            const err = new Error("This doctor is not registered in the clinicians table.");
+            err.code = "DOCTOR_NOT_IN_CLINICIANS";
+            throw err;
+        }
+        doctorFkValue = clinicianRes.rows[0].clinicianid;
+    }
+
+    return { mode, doctorFkValue };
+}
+
 function requireLogin(req, res, next) {
     if (!req.session?.userId) return res.redirect("/login");
     return next();
@@ -713,7 +730,7 @@ app.get('/home/:role', async (req, res) => {
                 SELECT COUNT(*) as total 
                 FROM appointments 
                 WHERE "${mode.appointmentsDoctorColumn}" = $1 
-                AND status != 'Completed'
+                AND status IN ('Scheduled', 'Active')
                 AND appointmentdatetime::date = CURRENT_DATE;
             `;
 
@@ -733,10 +750,13 @@ app.get('/home/:role', async (req, res) => {
                     p.patientid,
                     p.firstname,
                     p.lastname,
+                    a."status",
                     TO_CHAR(a."appointmentdatetime", 'HH12:MI AM') AS "Time"
                 FROM appointments a
                 JOIN patients p ON a."patientid" = p.patientid
-                WHERE a."${mode.appointmentsDoctorColumn}" = $1 AND a."status" = 'Scheduled'
+                WHERE a."${mode.appointmentsDoctorColumn}" = $1
+                  AND a."appointmentdatetime"::date = CURRENT_DATE
+                  AND a."status" IN ('Scheduled', 'Active')
                 ORDER BY a."appointmentdatetime" ASC
                 LIMIT 1;
             `;
@@ -758,6 +778,43 @@ app.get('/home/:role', async (req, res) => {
     } catch (error) {
         console.error('Error fetching home data:', error.message);
         res.status(500).send("Internal Server Error");
+    }
+});
+
+app.get("/api/doctor/next-appointment", requireLogin, requireRole("doctor"), async (req, res) => {
+    try {
+        const currentUserId = req.currentUser?.userid || req.session?.userId;
+        if (!currentUserId) return res.status(401).json({ error: "Unauthorized" });
+
+        const { mode, doctorFkValue } = await getDoctorFkValueForUserId(currentUserId);
+
+        const appointmentQuery = `
+            SELECT
+                a."appointmentid",
+                p.patientid,
+                p.firstname,
+                p.lastname,
+                a."status",
+                TO_CHAR(a."appointmentdatetime", 'HH12:MI AM') AS "Time"
+            FROM appointments a
+            JOIN patients p ON a."patientid" = p.patientid
+            WHERE a."${mode.appointmentsDoctorColumn}" = $1
+              AND a."appointmentdatetime"::date = CURRENT_DATE
+              AND a."status" IN ('Scheduled', 'Active')
+            ORDER BY a."appointmentdatetime" ASC
+            LIMIT 1;
+        `;
+
+        const appointmentResult = await pool.query(appointmentQuery, [doctorFkValue]);
+        const nextAppointment = appointmentResult.rows[0] || null;
+
+        return res.json({ nextAppointment });
+    } catch (err) {
+        if (err && err.code === "DOCTOR_NOT_IN_CLINICIANS") {
+            return res.status(403).json({ error: err.message });
+        }
+        console.error("Next appointment API error:", err.message);
+        return res.status(500).json({ error: "Internal Server Error" });
     }
 });
 

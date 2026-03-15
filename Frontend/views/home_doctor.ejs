@@ -28,15 +28,25 @@
                 <h3>Next Appointment</h3>
                 <span class="material-icons next-icon">access_time</span>
             </div>
-            <div class="patient-details">
-                <% if (typeof nextAppointment !== 'undefined' && nextAppointment) { %>
-                    <p>Patient: **<%= nextAppointment.firstname %> <%= nextAppointment.lastname %>**</p>
-                    <p>ID: **<%= nextAppointment.patientid %>**</p>
-                    <p>Time: **<%= nextAppointment.Time %>**</p>
-                    <button onclick="window.location.href='/transcribe?patientId=<%= nextAppointment.patientid %>'" class="btn-start-consultation">Start Consultation</button>
-                <% } else { %>
-                    <p>No scheduled appointments today.</p>
-                <% } %>
+            <div class="patient-details" id="nextAppointmentCard">
+                <p id="nextAppointmentEmpty" <%= (typeof nextAppointment !== 'undefined' && nextAppointment) ? 'style="display:none;"' : '' %>>
+                    No appointment left
+                </p>
+
+                <div id="nextAppointmentDetails" <%= (typeof nextAppointment !== 'undefined' && nextAppointment) ? '' : 'style="display:none;"' %>>
+                    <p>Patient: <strong id="nextAppointmentPatient"><%= (typeof nextAppointment !== 'undefined' && nextAppointment) ? (nextAppointment.firstname + ' ' + nextAppointment.lastname) : '' %></strong></p>
+                    <p>ID: <strong id="nextAppointmentPatientId"><%= (typeof nextAppointment !== 'undefined' && nextAppointment) ? nextAppointment.patientid : '' %></strong></p>
+                    <p>Time: <strong id="nextAppointmentTime"><%= (typeof nextAppointment !== 'undefined' && nextAppointment) ? nextAppointment.Time : '' %></strong></p>
+                </div>
+
+                <button
+                    id="startConsultationBtn"
+                    class="btn-start-consultation"
+                    data-patient-id="<%= (typeof nextAppointment !== 'undefined' && nextAppointment) ? nextAppointment.patientid : '' %>"
+                    <%= (typeof nextAppointment !== 'undefined' && nextAppointment) ? '' : 'style="display:none;" disabled' %>
+                >
+                    Start Consultation
+                </button>
             </div>
         </div>
 
@@ -61,5 +71,6 @@
     <%- include('includes/navbar.ejs', { userRole: userRole, currentPage: currentPage }) %>
 
     <script src="/js/main.js"></script>
+    <script src="/js/home_doctor.js"></script>
 </body>
 </html>
