@@ -15,6 +15,20 @@ Node.js (v18+)
 Python 3.9+
 FFmpeg (required for Whisper audio processing)
 
+Clone the Repository
+git clone https://github.com/Anandhalakshmi21/Mediscribe.git
+cd Mediscribe
+
+Backend Setup
+cd backend
+pip install -r requirements.txt
+python main.py
+
+Frontend Setup
+cd frontend
+npm install
+npm run dev
+
 Features
 High-Accuracy Transcription: Utilizes fine-tuned Whisper models on medical datasets (PriMock57) for precise clinical recognition.
 Automated SOAP Generation: Converts raw transcripts into structured Subjective, Objective, Assessment, and Plan (SOAP) reports.
